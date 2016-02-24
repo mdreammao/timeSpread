@@ -5,7 +5,20 @@ using System.Collections.Generic;
 namespace timeSpread
 {
 
-    
+    struct parameter
+    {
+        public int expriyMaxLimit;
+        public int expriyMinLimit;
+        public double lossStopRatio;
+        public double profitStopRatio;
+        public parameter(int max,int min,double loss,double profit)
+        {
+            expriyMaxLimit = max;
+            expriyMinLimit = min;
+            lossStopRatio = loss;
+            profitStopRatio = profit;
+        }
+    }
     /// <summary>
     /// 计算跨期价差收益的类类型。
     /// </summary>
@@ -24,6 +37,10 @@ namespace timeSpread
         private int startTime = 93000000;
         private int endTime = 150000000;
         /// <summary>
+        /// 给定回测参数的初始值。
+        /// </summary>
+        private parameter mypara=new parameter(12,7,0.8,1.2);
+        /// <summary>
         /// 回测开始结束日期信息。
         /// </summary>
         private TradeDay myTradeDay;
@@ -39,13 +56,14 @@ namespace timeSpread
         /// <param name="endDate">结束日期</param>
         /// <param name="startTime">日内开始时刻</param>
         /// <param name="endTime">日内结束时刻</param>
-        public TimeSpreadOne(int startDate,int endDate,int startTime,int endTime)
+        public TimeSpreadOne(int startDate,int endDate,int startTime,int endTime,double cash=100000000)
         {
             this.startDate = startDate;
             this.endDate = endDate;
             this.startTime = startTime;
             this.endTime = endTime;
             myTradeDay = new TradeDay(startDate, endDate);
+            this.totalCash = cash;
         }
         /// <summary>
         /// 开仓信号的核心判断函数。根据隐含波动率以及到期时间等参数进行判断。
@@ -187,11 +205,29 @@ namespace timeSpread
                 }
             }
         }
+        private tradeInformation GetOpitonShot(ref int index,tradeInformation shot,List<positionChange> change,int time)
+        {
+            while (change[index].thisTime<time)
+            {
+                if (index==change.Count-1 || change[index+1].thisTime>time)
+                {
+                    shot = PositionShot.GetPositionShot(shot, change[index]);
+                    break;
+                }
+                else
+                {
+                    shot = PositionShot.GetPositionShot(shot, change[index]);
+                    index += 1;
+                }
+            }
+            return shot;
+        }
         /// <summary>
         /// 回测的核心函数。利用历史数据模拟交易过程。
         /// </summary>
         public void TimeSpreadAnalysis()
         {
+            #region 初始化各类参数
             //myHoldStauts为记录每日的交易情况的类。
             myHoldStatus = new HoldStatus();
             //myHold记录每日持仓情况，根据该表可以统计每日资金占用以及头寸的情况。
@@ -203,9 +239,11 @@ namespace timeSpread
             double fee = 0;
             double optionValue = 0;
             double optionCost = 0;
+            #endregion
+            //逐步遍历交易日期，逐日进行回测。
             for (int dateIndex = 0; dateIndex < myTradeDay.MyTradeDays.Count; dateIndex++)
             {
-                //初始化参数
+                //初始化日内的参数
                 int today = myTradeDay.MyTradeDays[dateIndex];
                 fee = 0;
                 deltaCash = 0;
@@ -214,19 +252,116 @@ namespace timeSpread
                 double optionDelta = 0;
                 double optionGamma = 0;
                 myHold = myHoldStatus.GetPositionStatus();
-                
-                ///利用哈希表optionTrade来记录多个期权的交易信息
-                ///利用哈希表optionPositionShot来记录参与交易之后的盘口信息
-                ///利用哈希表optionPositionChange来记录多个期权的盘口变化信息
-                ///利用哈希表optionIndex来记录期权盘口时间对应的数据列表中的下标
-                ///利用哈希表closeCode来记录今日平仓的合约代码，以免后来重复开仓
+
+
+                //初始化各类信息，包括记录每个合约具体的盘口价格，具体的盘口价格变动，参与交易之后具体的盘口状态等。
                 Dictionary<int, List<tradeInformation>> optionTrade = new Dictionary<int, List<tradeInformation>>();
                 Dictionary<int, tradeInformation> optionPositionShot = new Dictionary<int, tradeInformation>();
                 Dictionary<int, List<positionChange>> optionPositionChange = new Dictionary<int, List<positionChange>>();
-                Dictionary<int, int> optionIndex = new Dictionary<int, int>(); //记录了期权合约遍历的位置，避免先开仓后平仓的情况。
-                List<int> closeCode = new List<int>();
+                //记录了期权合约遍历的位置，避免先开仓后平仓的情况。
+                Dictionary<int, int> optionIndex = new Dictionary<int, int>(); 
+                ////记录对应期权合约的optionIndex时刻的ask以及bid
+                //Dictionary<int, double> optionAskPrice = new Dictionary<int, double>();
+                //Dictionary<int, double> optionBidPrice = new Dictionary<int, double>();
 
-                //获取具体的交易信息
+                //第一步，选取今日应当关注的合约代码，包括平价附近的期权合约以及昨日遗留下来的持仓。其中，平价附近的期权合约必须满足交易日的需求，昨日遗留下来的持仓必须全部囊括。近月合约列入code，远月合约列入codeFurther。
+                //注意，某些合约既要进行开仓判断又要进行平仓判断。
+                
+                //获取当日的etf价格并找出其运动区间。
+                EtfTradeInformation myEtfToday = new EtfTradeInformation(today, startTime, endTime);
+                int etfIndex = 0;//记录今日etf价格对应的数组下标，从0开始。
+                double maxEtfPrice = myEtfToday.GetMaxPrice();
+                double minEtfPrice = myEtfToday.GetMinPrice();
+                List<int> optionAtTheMoney = OptionCodeInformation.GetOptionCodeInInterval(minEtfPrice, maxEtfPrice, today);
+                List<int> optionCode = new List<int>();
+                List<int> optionCodeFurther = new List<int>();
+                //记入今日平价附近的期权合约。
+                foreach (var code in optionAtTheMoney)
+                {
+                    int expiry = OptionCodeInformation.GetTimeSpan(code, today);
+                    if (expiry>=mypara.expriyMinLimit && expiry<=mypara.expriyMaxLimit)
+                    {
+                        int codeFurther = OptionCodeInformation.GetFurtherOption(code, today);
+                        if (codeFurther!=0 && optionCode.Contains(code)==false)
+                        {
+                            optionCode.Add(code);
+                            optionCodeFurther.Add(codeFurther);
+                        }
+                    }
+                }
+                //记入昨日持仓的期权合约
+                List<int> myHoldyesterday = new List<int>();
+                myHoldyesterday.AddRange(myHold.Keys);
+                foreach (var code in myHoldyesterday)
+                {
+                    int codeFurther= OptionCodeInformation.GetFurtherOption(code, today);
+                    if (myHoldyesterday.Contains(codeFurther) && optionCode.Contains(code)==false)
+                    {
+                        optionCode.Add(code);
+                        optionCodeFurther.Add(codeFurther);
+                    }
+                }
+                //
+                //根据合约代码的信息，从sql数据库中提取今日的数据信息。并初始化code以及codeFurther的初始化状态。
+                foreach (var code in optionCode)
+                {
+                    PositionShot myOptionChange = new PositionShot(code, today);
+                    optionPositionChange.Add(code, myOptionChange.GetPositionChange());
+                    tradeInformation positionInitial = new tradeInformation(0,0);
+                    optionPositionShot.Add(code, positionInitial);
+                    optionIndex.Add(code, 0);
+                }
+                foreach (var code in optionCodeFurther)
+                {
+                    PositionShot myOptionChange = new PositionShot(code, today);
+                    optionPositionChange.Add(code, myOptionChange.GetPositionChange());
+                    tradeInformation positionInitial = new tradeInformation(0, 0);
+                    optionPositionShot.Add(code, positionInitial);
+                    optionIndex.Add(code, 0);
+                }
+                
+                
+                //第二部，根据当日的行情逐tick进行信号的判断。并采取对应的开平仓措施
+                #region 逐tick进行开仓以及平仓的判断。
+                //按时间的下标进行遍历，4小时对应28800个tick，忽略最后3分钟必定进行集合竞价的时间段。当然，具体的遍历时间可以具体讨论。
+                for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
+                {
+                    int time = TradeDay.MyTradeTicks[timeIndex];
+                    //计算实时的标的etf的价格
+                    double etfPrice = 0;
+                    while (myEtfToday.myTradeInformation[etfIndex].time<=time)
+                    {
+                        if (etfIndex==myEtfToday.myTradeInformation.Count-1 || myEtfToday.myTradeInformation[etfIndex+1].time > time)
+                        {
+                            etfPrice = myEtfToday.myTradeInformation[etfIndex].lastPrice;
+                            break;
+                        }
+                        etfPrice += 1;
+                    }
+                    //逐对合约进行观察，分析其当前价格的ask以及bid
+                    //需要考察的合约必须是1.有开仓潜力的新合约2.仓位未平的老合约
+                    for (int codeListIndex = 0; codeListIndex < optionCode.Count; codeListIndex++)
+                    {
+                        int code = optionCode[codeListIndex];
+                        int codeFurther = optionCodeFurther[codeListIndex];
+                        //合约到日期不再范围之内的不予考虑
+                        int expiry = OptionCodeInformation.GetTimeSpan(code, today);
+                        if ((expiry < mypara.expriyMinLimit || expiry > mypara.expriyMaxLimit)&& myHold[code].position==0)
+                        {
+                            continue;
+                        }
+                        //根据合约代码对应的数组下标以及合约代码对应的盘口快照，生成当前时刻的盘口快照。
+                        int index = optionIndex[code];
+                        int indexFurther = optionIndex[codeFurther];
+                        optionPositionShot[code]=GetOpitonShot(ref index, optionPositionShot[code], optionPositionChange[code], time);
+                        optionPositionShot[codeFurther] = GetOpitonShot(ref indexFurther, optionPositionShot[codeFurther], optionPositionChange[codeFurther], time);
+                        optionIndex[code] = index;
+                        optionIndex[codeFurther] = indexFurther;
+                    }
+                }
+                #endregion 
+
+
                 #region 对持仓的头寸进行平仓信号的判断
                 //查询历史持仓，如果满足平仓条件，就平仓
                 //根据历史的持仓进行判断
@@ -645,7 +780,7 @@ namespace timeSpread
                     }
                 }
                 #endregion
-
+                   
                 //对今日的持仓进行清理，如果持仓为0就去除该项记录。
                 myHoldKey = new List<int>();
                 myHoldKey.AddRange(myHold.Keys);
@@ -656,6 +791,8 @@ namespace timeSpread
                         myHold.Remove(myKey);
                     }
                 }
+
+                #region 计算，记录并显示当日交易情况，持仓情况
                 //将今日持仓情况存入列表。之后才可以根据该头寸计算保证金，希腊值等。
                 myHoldStatus.InsertPositionStatus(today, myHold);
                 //计算当日持仓状态,包括维持保证金，期权的当前价值，开仓成本，希腊值等
@@ -663,11 +800,13 @@ namespace timeSpread
                 //计算当日收盘之后的可用资金
                 cashAvailable = totalCash - optionMargin;
                 //将当天的情况存储进入myHoldStatus
-                myHoldStatus.InsertCashStatus(today, cashAvailable, optionMargin, fee,optionValue);
+                myHoldStatus.InsertCashStatus(today, cashAvailable, optionMargin, fee, optionValue);
                 myHoldStatus.InsertGreekStatus(today, optionDelta, optionGamma);
                 //在屏幕上输出每日的情况。
-                Console.WriteLine("{0},optionValue: {1}, Margin: {2}, Cash: {3}, total: {4}", today, Math.Round(optionValue), Math.Round(optionMargin), Math.Round(cashAvailable),Math.Round(totalCash+optionValue));
-                Console.WriteLine("          delta: {0}, gamma: {1}, optionCost: {2} ", Math.Round(optionDelta), Math.Round(optionGamma),Math.Round(optionCost));
+                Console.WriteLine("{0},optionValue: {1}, Margin: {2}, Cash: {3}, total: {4}", today, Math.Round(optionValue), Math.Round(optionMargin), Math.Round(cashAvailable), Math.Round(totalCash + optionValue));
+                Console.WriteLine("          delta: {0}, gamma: {1}, optionCost: {2} ", Math.Round(optionDelta), Math.Round(optionGamma), Math.Round(optionCost));
+                #endregion
+
             }
         }
         /// <summary>

@@ -13,6 +13,15 @@ namespace timeSpread
         public double lastPrice;
         public double[] ask, bid;
         public int[] askv, bidv;
+        public tradeInformation(int time,double price)
+        {
+            this.time = time;
+            lastPrice = price;
+            ask = new double[5];
+            bid = new double[5];
+            askv = new int[5];
+            bidv = new int[5];
+        }
     }
     /// <summary>
     /// 获取期权合约的交易数据。提供方法读取盘口tick数据。
