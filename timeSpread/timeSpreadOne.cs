@@ -205,22 +205,122 @@ namespace timeSpread
                 }
             }
         }
+        /// <summary>
+        /// 给定之前盘口价格的状态，给定目标时刻以及全天的盘口价格变化情况，给出目标时刻的盘口状态。
+        /// </summary>
+        /// <param name="index">当前盘口状态数组下标</param>
+        /// <param name="shot">前一状态盘口价格</param>
+        /// <param name="change">全天的盘口价格变化</param>
+        /// <param name="time">目标时刻的时间</param>
+        /// <returns>目标时刻的盘口状态</returns>
         private tradeInformation GetOpitonShot(ref int index,tradeInformation shot,List<positionChange> change,int time)
         {
-            while (change[index].thisTime<time)
+            while (index<=change.Count-1 && change[index].thisTime<=time)
             {
-                if (index==change.Count-1 || change[index+1].thisTime>time)
-                {
-                    shot = PositionShot.GetPositionShot(shot, change[index]);
-                    break;
-                }
-                else
-                {
-                    shot = PositionShot.GetPositionShot(shot, change[index]);
-                    index += 1;
-                }
+                shot = PositionShot.GetPositionShot(shot, change[index]);
+                index += 1;
             }
             return shot;
+        }
+        /// <summary>
+        /// 根据盘口价格和其他参数，判断当前时刻是否该开仓，如果开仓，应该开多大的仓位。
+        /// </summary>
+        /// <param name="etfPrice">50etf的价格</param>
+        /// <param name="strike">期权的行权价</param>
+        /// <param name="type">期权的类型</param>
+        /// <param name="shot">近月期权的盘口价格</param>
+        /// <param name="shotFurther">远月期权的盘口价格</param>
+        /// <param name="expiry">近月期权的到期日</param>
+        /// <param name="expiryFurther">远月期权的到期日</param>
+        /// <param name="para">开平仓的参数</param>
+        /// <returns>返回开仓数量，如果不开仓返回0</returns>
+        private int GetOptionOpenVolumn(double etfPrice,double strike,string type,tradeInformation shot, tradeInformation shotFurther, int expiry, int expiryFurther,parameter para)
+        {
+            int openVolumn = 0;
+            if (expiry<para.expriyMinLimit || expiry>para.expriyMaxLimit)
+            {
+                return 0;
+            }
+            double price = shot.bid[0];
+            int volumn = shotFurther.bidv[0];
+            double priceFurther = shotFurther.ask[0];
+            int volumnFurther = shotFurther.askv[0];
+            bool open = false;
+            if (etfPrice*price * volumn * priceFurther * volumnFurther > 0)
+            {
+                open = Judgement(etfPrice, price, priceFurther, expiry, expiryFurther, strike, type);
+            }
+            if (open==true)
+            {
+                openVolumn = Math.Min(volumn, volumnFurther);
+            }
+            return openVolumn;
+        }
+        /// <summary>
+        /// 给定近月以及远月期权合约的历史持仓以及当前盘口价格，得到应该平仓的头寸。
+        /// </summary>
+        /// <param name="option">近月合约历史持仓</param>
+        /// <param name="optionFurther">远月合约历史持仓</param>
+        /// <param name="shot">近月合约盘口状态</param>
+        /// <param name="shotFurther">远月合约盘口状态</param>
+        /// <param name="expiry">近月合约的到期日期</param>
+        /// <returns>应该平仓的头寸，如果不平仓则返回0</returns>
+        private int GetOptionCloseVolumn(optionHold option,optionHold optionFurther,tradeInformation shot,tradeInformation shotFurther,int expiry,parameter para)
+        {
+            int volumn = 0;
+            //在当前情况下，近月合约只能是空头，远月合约是多头。如果以后需要扩展，可以从volume的正负号上体现出来。
+            if (option.position<0)
+            {
+                double price = shot.ask[0];
+                double priceFurther = shotFurther.bid[0];
+                if ((priceFurther-price)/(optionFurther.price-option.price)>para.profitStopRatio || (priceFurther - price) / (optionFurther.price - option.price) < para.lossStopRatio || expiry<=1)
+                {
+                    volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
+                }
+
+            }
+            return volumn;
+        }
+        /// <summary>
+        /// 改变持仓情况的函数。
+        /// </summary>
+        /// <param name="oldHold">旧的持仓情况</param>
+        /// <param name="price">最近成交的价格</param>
+        /// <param name="volumn">最近成交的头寸</param>
+        /// <returns>新的持仓情况</returns>
+        private optionHold GetNewHold(optionHold oldHold,double price,int volumn)
+        {
+            optionHold newHold = new optionHold();
+            int newPosition = volumn + oldHold.position;
+            double newPrice = (newPosition == 0) ? 0 : (price * volumn + oldHold.price * oldHold.position) / newPosition;
+            newHold.price = newPrice;
+            newHold.position = newPosition;
+            return newHold;
+        }
+        /// <summary>
+        /// 根据价格和成交量的信息，生成给出盘口价格变动的信息。
+        /// </summary>
+        /// <param name="lastTime">上一次交易时间</param>
+        /// <param name="thisTime">当前时间</param>
+        /// <param name="price">当前成交价格</param>
+        /// <param name="volumn">当前成交量</param>
+        /// <param name="type">ask还是bid价格的成交</param>
+        /// <returns>返回盘口变动的情况</returns>
+        private positionChange GetShotChange(int lastTime,int thisTime,double price,int volumn,string type)
+        {
+            positionChange myChange = new positionChange(lastTime,thisTime);
+            positionStatus myChange0 = new positionStatus();
+            myChange0.price = price;
+            myChange0.volumn = -volumn;
+            if (type=="ask")
+            {
+                myChange.askChange.Add(myChange0);
+            }
+            else
+            {
+                myChange.bidChange.Add(myChange0);
+            }
+            return myChange;
         }
         /// <summary>
         /// 回测的核心函数。利用历史数据模拟交易过程。
@@ -239,6 +339,9 @@ namespace timeSpread
             double fee = 0;
             double optionValue = 0;
             double optionCost = 0;
+            //初始化记录期权行权价和期权类型的哈希表。该表不随交易日变化而变化。
+            Dictionary<int, double> optionStrike = new Dictionary<int, double>();
+            Dictionary<int, string> optionType = new Dictionary<int, string>();
             #endregion
             //逐步遍历交易日期，逐日进行回测。
             for (int dateIndex = 0; dateIndex < myTradeDay.MyTradeDays.Count; dateIndex++)
@@ -259,10 +362,9 @@ namespace timeSpread
                 Dictionary<int, tradeInformation> optionPositionShot = new Dictionary<int, tradeInformation>();
                 Dictionary<int, List<positionChange>> optionPositionChange = new Dictionary<int, List<positionChange>>();
                 //记录了期权合约遍历的位置，避免先开仓后平仓的情况。
-                Dictionary<int, int> optionIndex = new Dictionary<int, int>(); 
-                ////记录对应期权合约的optionIndex时刻的ask以及bid
-                //Dictionary<int, double> optionAskPrice = new Dictionary<int, double>();
-                //Dictionary<int, double> optionBidPrice = new Dictionary<int, double>();
+                Dictionary<int, int> optionIndex = new Dictionary<int, int>();
+                //记录了期权合约距离到期的日期
+                Dictionary<int, int> optionExpiry = new Dictionary<int, int>();
 
                 //第一步，选取今日应当关注的合约代码，包括平价附近的期权合约以及昨日遗留下来的持仓。其中，平价附近的期权合约必须满足交易日的需求，昨日遗留下来的持仓必须全部囊括。近月合约列入code，远月合约列入codeFurther。
                 //注意，某些合约既要进行开仓判断又要进行平仓判断。
@@ -310,6 +412,13 @@ namespace timeSpread
                     tradeInformation positionInitial = new tradeInformation(0,0);
                     optionPositionShot.Add(code, positionInitial);
                     optionIndex.Add(code, 0);
+                    optionExpiry.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
+                    if (optionStrike.ContainsKey(code)==false)
+                    {
+                        OptionCodeInformation option = new OptionCodeInformation(code);
+                        optionStrike.Add(code, option.GetOptionStrike());
+                        optionType.Add(code, option.GetOptionType());
+                    }
                 }
                 foreach (var code in optionCodeFurther)
                 {
@@ -318,35 +427,40 @@ namespace timeSpread
                     tradeInformation positionInitial = new tradeInformation(0, 0);
                     optionPositionShot.Add(code, positionInitial);
                     optionIndex.Add(code, 0);
+                    optionExpiry.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
+                    if (optionStrike.ContainsKey(code) == false)
+                    {
+                        OptionCodeInformation option = new OptionCodeInformation(code);
+                        optionStrike.Add(code, option.GetOptionStrike());
+                        optionType.Add(code, option.GetOptionType());
+                    }
                 }
-                
-                
                 //第二部，根据当日的行情逐tick进行信号的判断。并采取对应的开平仓措施
                 #region 逐tick进行开仓以及平仓的判断。
                 //按时间的下标进行遍历，4小时对应28800个tick，忽略最后3分钟必定进行集合竞价的时间段。当然，具体的遍历时间可以具体讨论。
+                double etfPrice = 0;//etf价格从tick0开始遍历
+                //在同一个tick里面，不能刚开仓就平仓，记录平仓发生时刻的时间下标。
+                Dictionary<int, int> closeTimeIndex = new Dictionary<int, int>();
                 for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
                 {
                     int time = TradeDay.MyTradeTicks[timeIndex];
                     //计算实时的标的etf的价格
-                    double etfPrice = 0;
-                    while (myEtfToday.myTradeInformation[etfIndex].time<=time)
+                    while (etfIndex<= myEtfToday.myTradeInformation.Count - 1 && myEtfToday.myTradeInformation[etfIndex].time<=time)
                     {
-                        if (etfIndex==myEtfToday.myTradeInformation.Count-1 || myEtfToday.myTradeInformation[etfIndex+1].time > time)
-                        {
-                            etfPrice = myEtfToday.myTradeInformation[etfIndex].lastPrice;
-                            break;
-                        }
-                        etfPrice += 1;
+                        etfPrice = myEtfToday.myTradeInformation[etfIndex].lastPrice;
+                        etfIndex += 1;
                     }
                     //逐对合约进行观察，分析其当前价格的ask以及bid
-                    //需要考察的合约必须是1.有开仓潜力的新合约2.仓位未平的老合约
+                    //需要考察的合约必须是 1.有开仓潜力的新合约 2.仓位未平的老合约
                     for (int codeListIndex = 0; codeListIndex < optionCode.Count; codeListIndex++)
                     {
                         int code = optionCode[codeListIndex];
                         int codeFurther = optionCodeFurther[codeListIndex];
+                        
                         //合约到日期不再范围之内的不予考虑
-                        int expiry = OptionCodeInformation.GetTimeSpan(code, today);
-                        if ((expiry < mypara.expriyMinLimit || expiry > mypara.expriyMaxLimit)&& myHold[code].position==0)
+                        int expiry = optionExpiry[code];
+                        int expiryFurther = optionExpiry[codeFurther];
+                        if ((expiry < mypara.expriyMinLimit || expiry > mypara.expriyMaxLimit) && myHold[code].position==0)
                         {
                             continue;
                         }
@@ -358,431 +472,100 @@ namespace timeSpread
                         optionIndex[code] = index;
                         optionIndex[codeFurther] = indexFurther;
                     }
-                }
-                #endregion 
-
-
-                #region 对持仓的头寸进行平仓信号的判断
-                //查询历史持仓，如果满足平仓条件，就平仓
-                //根据历史的持仓进行判断
-                //主要根据持仓情况进行止盈止损
-                //根据myhold的情况提取信息
-                List<int> myHoldKey = new List<int>();
-                myHoldKey.AddRange(myHold.Keys);
-                foreach (var myKey in myHoldKey)
-                {
-                    //提出持仓中的一对近月合约和远月合约
-                    int code = myKey;
-                    int codeFurther = OptionCodeInformation.GetFurtherOption(code, today);
-                    if (myHold.ContainsKey(code) == false ||myHold[code].position==0|| myHold.ContainsKey(codeFurther)==false || myHold[codeFurther].position==0)
+                    //在每个tick如果有仓位就必须进行平仓的判断。如果满足开仓条件就必须进行开仓。对所有的近月option遍历进行判断。
+                    for (int codeListIndex = 0; codeListIndex < optionCode.Count; codeListIndex++)
                     {
-                        continue;
-                    }
-                    //获取近月以及远月合约的盘口信息
-                    OptionTradeInformation myOptionTrade0 = new OptionTradeInformation(code, today);
-                    OptionTradeInformation myOptionTrade1 = new OptionTradeInformation(codeFurther, today);
-                    optionTrade.Add(code, myOptionTrade0.myTradeInformation);
-                    optionTrade.Add(codeFurther, myOptionTrade1.myTradeInformation);
-                    //获取近月以及远月合约的盘口变化列表
-                    PositionShot myOptionChange0 = new PositionShot(code, today);
-                    PositionShot myOptionChange1 = new PositionShot(codeFurther, today);
-                    optionPositionChange.Add(code, myOptionChange0.GetPositionChange());
-                    optionPositionChange.Add(codeFurther, myOptionChange1.GetPositionChange());
-                    //记录对应合约在参与交易之后盘口的信息
-                    tradeInformation positionInitial = new tradeInformation();
-                    positionInitial.ask = new double[5];
-                    positionInitial.bid = new double[5];
-                    positionInitial.askv = new int[5];
-                    positionInitial.bidv = new int[5];
-                    optionPositionShot.Add(code, positionInitial);
-                    optionPositionShot.Add(codeFurther, positionInitial);
-                    //存放盘口时间对应的数组下标，初始化为-1
-                    optionIndex.Add(code, -1);
-                    optionIndex.Add(codeFurther, -1);
-                    for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
-                    {
-                        int time = TradeDay.MyTradeTicks[timeIndex];
-                        //分合约计算出盘口数据并对盘口进行判断
-                        int index = optionIndex[code];
-                        int indexFurther = optionIndex[codeFurther];
-                        int k = 0;
-                        for (k = index + 1; k < optionPositionChange[code].Count; k++)
+                        //记录合约代码
+                        int code = optionCode[codeListIndex];
+                        int codeFurther = optionCodeFurther[codeListIndex];
+                        //记录合约到期日
+                        int expiry = optionExpiry[code];
+                        int expiryFurther = optionExpiry[codeFurther];
+                        //如果仓位未平就需要平仓判断。
+                        if (myHold.ContainsKey(code) && myHold[code].position!=0)
                         {
-                            if (optionPositionChange[code][k].thisTime > time)
+                            //为简单起见这里只做关于成本的止盈止损判断。
+                            int volumn = GetOptionCloseVolumn(myHold[code], myHold[codeFurther], optionPositionShot[code], optionPositionShot[codeFurther], expiry, mypara);
+                            //若通过判断得到的平仓头寸大于0，这进行状态变化的计算以及记录。
+                            if (volumn>0) 
                             {
-                                k = k - 1;
-                                break;
-                            }
-                            optionPositionShot[code] = PositionShot.GetPositionShot(optionPositionShot[code], optionPositionChange[code][k]);
-                        }
-                        optionIndex[code] = k;
-                        k = 0;
-                        for (k = indexFurther + 1; k < optionPositionChange[codeFurther].Count; k++)
-                        {
-                            if (optionPositionChange[codeFurther][k].thisTime > time)
-                            {
-                                k = k - 1;
-                                break;
-                            }
-                            optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], optionPositionChange[codeFurther][k]);
-                        }
-                        optionIndex[codeFurther] = k;
-                        double price = optionPositionShot[code].ask[0];
-                        int volumn = optionPositionShot[code].askv[0];
-                        double priceFurther = optionPositionShot[codeFurther].bid[0];
-                        int volumnFurther = optionPositionShot[codeFurther].bidv[0];
-                        bool close  = false;
-                        //核心平仓条件的判断
-                        int expiry = OptionCodeInformation.GetTimeSpan(code, today);
-                        if (expiry <= 1)
-                        {
-                            close = true;
-                        }
-                        if ( price * volumn * priceFurther * volumnFurther > 0)
-                        {
-                            close = ((priceFurther - price) / (myHold[codeFurther].price - myHold[code].price)<0.9 ? true : close);
-                            close = ((priceFurther - price) / (myHold[codeFurther].price - myHold[code].price) >1.4 ? true : close);
-                           // close = (((priceFurther - price) - (myHold[codeFurther].price - myHold[code].price)) < -0.005 ? true : close);
-                           // close = (((priceFurther - price) - (myHold[codeFurther].price - myHold[code].price)) > 0.02 ? true : close);
-                        }
-                        #region 平仓。如果满足平仓条件，就进行平仓的操作
-                        if (close == true)
-                        {
-                            
-                            //记录当日平仓的合约代码，阻止重复开仓。
-                            if (closeCode.Contains(code)==false)
-                            {
-                                closeCode.Add(code);
-                            }
-                            if (closeCode.Contains(codeFurther)==false)
-                            {
-                                closeCode.Add(codeFurther);
-                            }
-                            optionHold nowHold = new optionHold();
-                            optionHold nowHoldFurther = new optionHold();
-                            nowHold.price = price;
-                            int myChangePosition= Math.Min(Math.Min(volumn, volumnFurther), Math.Abs(myHold[code].position));
-                            nowHold.position = myChangePosition;
-                            nowHoldFurther.price = priceFurther;
-                            nowHoldFurther.position = -myChangePosition;
-                            deltaCash+= myChangePosition * ((priceFurther - price) * 10000 - 2.3 * 2);
-                            totalCash += myChangePosition * ((priceFurther - price) * 10000 - 2.3*2);
-                            fee += myChangePosition * 2.3 * 2;
-                            //保存具体的平仓交易记录（按时间日期分类）。
-                            myHoldStatus.InsertTradeStatus(code, dateIndex, timeIndex, price, myChangePosition);
-                            myHoldStatus.InsertTradeStatus(codeFurther, dateIndex, timeIndex, priceFurther, -myChangePosition);
-                            //保持具体的平仓交易记录（按期权合约代码分类）。
-                            myHoldStatus.InsertTradeStatusOrderByCode(code, today, time, price, myChangePosition);
-                            myHoldStatus.InsertTradeStatusOrderByCode(codeFurther, today, time, priceFurther, -myChangePosition);
-                            if (myHold.ContainsKey(code) == true)
-                            {
-                                optionHold oldHold = myHold[code];
-                                int totalPosition = oldHold.position + nowHold.position;
-                                if (totalPosition==0)
+                                //提取盘口买一和卖一价格。
+                                double price = optionPositionShot[code].ask[0];
+                                double priceFurther = optionPositionShot[codeFurther].bid[0];
+                                //保存具体的平仓交易记录（按时间日期分类）。
+                                myHoldStatus.InsertTradeStatus(code, dateIndex, timeIndex, price, volumn);
+                                myHoldStatus.InsertTradeStatus(codeFurther, dateIndex, timeIndex, priceFurther, -volumn);
+                                //保持具体的平仓交易记录（按期权合约代码分类）。
+                                myHoldStatus.InsertTradeStatusOrderByCode(code, today, time, price, volumn);
+                                myHoldStatus.InsertTradeStatusOrderByCode(codeFurther, today, time, priceFurther, -volumn);
+                                //对持仓情况产生了影响。
+                                myHold[code] = GetNewHold(myHold[code], price, volumn);
+                                myHold[codeFurther] = GetNewHold(myHold[codeFurther], priceFurther, -volumn);
+                                //对盘口价格产生了影响。将策略参与到市场之后得到的盘口价格记录下来。
+                                optionPositionShot[code] = PositionShot.GetPositionShot(optionPositionShot[code], GetShotChange(optionPositionShot[code].time,time,price,volumn,"ask"));
+                                optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], GetShotChange(optionPositionShot[codeFurther].time, time, priceFurther, volumn, "bid"));
+                                //记录整体情况
+                                totalCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
+                                deltaCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
+                                fee += volumn * 2.3 * 2;
+                                //记录当日平仓时刻
+                                if (closeTimeIndex.ContainsKey(code)==false)
                                 {
-                                    myHold.Remove(code);
+                                    closeTimeIndex.Add(code, timeIndex);
+                                    closeTimeIndex.Add(codeFurther, timeIndex);
                                 }
                                 else
                                 {
-                                    nowHold.price = (oldHold.price * oldHold.position + nowHold.price * nowHold.position) / totalPosition;
-                                    nowHold.position = totalPosition;
-                                    myHold[code] = nowHold;
+                                    closeTimeIndex[code] = timeIndex;
+                                    closeTimeIndex[codeFurther] = timeIndex;
                                 }
                             }
-                            else
-                            {
-                                myHold.Add(code, nowHold);
-                            }
-                            if (myHold.ContainsKey(codeFurther) == true)
-                            {
-                                optionHold oldHold = myHold[codeFurther];
-                                int totalPosition = oldHold.position + nowHoldFurther.position;
-                                if (totalPosition==0)
-                                {
-                                    myHold.Remove(codeFurther);
-                                }
-                                else
-                                {
-                                    nowHoldFurther.price = (oldHold.price * oldHold.position + nowHoldFurther.price * nowHoldFurther.position) / totalPosition;
-                                    nowHoldFurther.position = totalPosition;
-                                    myHold[codeFurther] = nowHoldFurther;
-                                }
-                            }
-                            else
-                            {
-                                myHold.Add(codeFurther, nowHoldFurther);
-                            }
-
-                            //对盘口价格产生了影响
-                            positionChange myChange = new positionChange(optionPositionShot[code].time, time);
-                            positionStatus myChange0 = new positionStatus();
-                            myChange0.price = price;
-                            myChange0.volumn = -myChangePosition;
-                            myChange.askChange.Add(myChange0);
-                            optionPositionShot[code] = PositionShot.GetPositionShot(optionPositionShot[code], myChange);
-                            positionChange myChangeFurther = new positionChange(optionPositionShot[codeFurther].time, time);
-                            positionStatus myChangeFurther0 = new positionStatus();
-                            myChangeFurther0.price = priceFurther;
-                            myChangeFurther0.volumn = -myChangePosition;
-                            myChangeFurther.bidChange.Add(myChangeFurther0);
-                            optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], myChangeFurther);
+                        }
+                        //如果到日期满足跨期价差的条件，进行开仓的判断
+                        int openVolumn = 0;
+                        if (closeTimeIndex.ContainsKey(code)==false || closeTimeIndex[code]>timeIndex+600*2)
+                        {
+                            openVolumn = GetOptionOpenVolumn(etfPrice, optionStrike[code], optionType[code], optionPositionShot[code], optionPositionShot[codeFurther], expiry, expiryFurther, mypara);
+                        }
+                        if (openVolumn>0)
+                        {
+                            //提取盘口的买一和卖一价格。
+                            double price = optionPositionShot[code].bid[0];
+                            double priceFurther = optionPositionShot[codeFurther].ask[0];
+                            //记录开仓的逐笔数据，按时间日期分类。
+                            myHoldStatus.InsertTradeStatus(code, dateIndex, timeIndex, price, -openVolumn);
+                            myHoldStatus.InsertTradeStatus(codeFurther, dateIndex, timeIndex, priceFurther,openVolumn);
+                            //记录开仓的逐笔数据，按期权合约代码分类。
+                            myHoldStatus.InsertTradeStatusOrderByCode(code, today, time, price, -openVolumn);
+                            myHoldStatus.InsertTradeStatusOrderByCode(codeFurther, today, time, priceFurther, openVolumn);
+                            //对持仓情况产生了影响。如果持仓未有记录就新生成对应的持仓记录。
                             if (myHold.ContainsKey(code)==false)
                             {
-                                break;
+                                optionHold newHold = new optionHold();
+                                myHold.Add(code, newHold);
                             }
                             if (myHold.ContainsKey(codeFurther) == false)
                             {
-                                break;
+                                optionHold newHold = new optionHold();
+                                myHold.Add(codeFurther, newHold);
                             }
-                        }
-                        #endregion
-                    }
-
-                }
-                #endregion
-
-                #region 对开仓的信号进行判断
-                bool positionOpen = true;
-                //获取当日的etf价格并找出其运动区间
-                EtfTradeInformation myEtfToday = new EtfTradeInformation(today, startTime, endTime);
-                double maxEtfPrice = myEtfToday.GetMaxPrice();
-                double minEtfPrice = myEtfToday.GetMinPrice();
-                //根据当日etf价格找出平价附近的期权的合约代码
-                List<int> optionCode = OptionCodeInformation.GetOptionCodeInInterval(minEtfPrice, maxEtfPrice, today);
-                List<int> optionCodeFurther = new List<int>();
-                //计算合约的到期时间，仅考虑5-12天之间的期权，其他的跳过
-                int expiry0 = OptionCodeInformation.GetTimeSpan(optionCode[0], today);
-                if (expiry0 < 5 || expiry0 > 12)
-                {
-                    positionOpen = false;
-                }
-                
-                if (positionOpen==true)
-                {
-                    
-                    //信息的获取以及初始化
-                    for (int i = 0; i < optionCode.Count; i++)
-                    {
-                        //获取近月合约代码
-                        int optionCode0 = optionCode[i];
-                        //构造类的实现，包含近月合约的信息
-                        OptionCodeInformation myOptionCode0 = new OptionCodeInformation(optionCode0);
-                        //构造类的实现，包含远月合约的信息
-                        OptionCodeInformation myOptionCode1 = new OptionCodeInformation(OptionCodeInformation.GetFurtherOption(optionCode0, today));
-                        //将远月合约的代码记录到数组中
-                        optionCodeFurther.Add(myOptionCode1.GetOptionCode());
-                        //获取近月以及远月合约的盘口信息
-                        OptionTradeInformation myOptionTrade0 = new OptionTradeInformation(myOptionCode0.GetOptionCode(), today);
-                        OptionTradeInformation myOptionTrade1 = new OptionTradeInformation(myOptionCode1.GetOptionCode(), today);
-                        try
-                        {
-                            if (optionTrade.ContainsKey(myOptionCode0.GetOptionCode())==false)
-                            {
-                                optionTrade.Add(myOptionCode0.GetOptionCode(), myOptionTrade0.myTradeInformation);
-                            }
-                            if (optionTrade.ContainsKey(myOptionCode0.GetOptionCode()) == false)
-                            {
-                                optionTrade.Add(myOptionCode1.GetOptionCode(), myOptionTrade1.myTradeInformation);
-                            }
-                        }
-                        catch
-                        {
-                            Console.WriteLine("Data Error!");
-                        }
-                        //获取近月以及远月合约的盘口变化列表
-                        PositionShot myOptionChange0 = new PositionShot(myOptionCode0.GetOptionCode(), today);
-                        PositionShot myOptionChange1 = new PositionShot(myOptionCode1.GetOptionCode(), today);
-                        try
-                        {
-                            if (optionPositionChange.ContainsKey(myOptionCode0.GetOptionCode())==false)
-                            {
-                                optionPositionChange.Add(myOptionCode0.GetOptionCode(), myOptionChange0.GetPositionChange());
-                            }
-                            if (optionPositionChange.ContainsKey(myOptionCode1.GetOptionCode()) == false)
-                            {
-                                optionPositionChange.Add(myOptionCode1.GetOptionCode(), myOptionChange1.GetPositionChange());
-                            }
-                        }
-                        catch
-                        {
-                            Console.WriteLine("Data Error!");
-                        }
-                        //记录对应合约在参与交易之后盘口的信息
-                        tradeInformation positionInitial = new tradeInformation();
-                        positionInitial.ask = new double[5];
-                        positionInitial.bid = new double[5];
-                        positionInitial.askv = new int[5];
-                        positionInitial.bidv = new int[5];
-                        try
-                        {
-                            if (optionPositionShot.ContainsKey(myOptionCode0.GetOptionCode())==false)
-                            {
-                                optionPositionShot.Add(myOptionCode0.GetOptionCode(), positionInitial);
-                            }
-                            if (optionPositionShot.ContainsKey(myOptionCode1.GetOptionCode()) == false)
-                            {
-                                optionPositionShot.Add(myOptionCode1.GetOptionCode(), positionInitial);
-                            }
-                            
-                            
-                            //存放盘口时间对应的数组下标，初始化为-1
-                            if(optionIndex.ContainsKey(myOptionCode0.GetOptionCode()) == false)
-                            {
-                                optionIndex.Add(myOptionCode0.GetOptionCode(), -1);
-                            }
-                            if (optionIndex.ContainsKey(myOptionCode1.GetOptionCode()) == false)
-                            {
-                                optionIndex.Add(myOptionCode1.GetOptionCode(), -1);
-                            }
-                        }
-                        catch
-                        {
-                            Console.WriteLine("Data Error!");
+                            myHold[code] = GetNewHold(myHold[code], price,-openVolumn);
+                            myHold[codeFurther] = GetNewHold(myHold[codeFurther], priceFurther, openVolumn);
+                            //对盘口价格产生了影响。将策略参与到市场之后得到的盘口价格记录下来。
+                            optionPositionShot[code] = PositionShot.GetPositionShot(optionPositionShot[code], GetShotChange(optionPositionShot[code].time, time, price, openVolumn, "bid"));
+                            optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], GetShotChange(optionPositionShot[codeFurther].time, time, priceFurther, openVolumn, "ask"));
+                            //记录整体情况
+                            totalCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
+                            deltaCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
+                            fee += openVolumn * 2.3 * 2;
                         }
                     }
-                    //计算远月合约的到期时间
-                    int expiryFurther0=OptionCodeInformation.GetTimeSpan(optionCodeFurther[0], today);
-                    
-                    //按时间顺序查找开仓机会
-                    for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
-                    {
-                        int time = TradeDay.MyTradeTicks[timeIndex];
-                        //计算实时的标的etf的价格
-                        double etfPrice = 0;
-                        for (int etfIndex = 1; etfIndex < myEtfToday.myTradeInformation.Count; etfIndex++)
-                        {
-                            if (myEtfToday.myTradeInformation[etfIndex].time>time)
-                            {
-                                etfPrice = myEtfToday.myTradeInformation[etfIndex - 1].lastPrice;
-                                break;
-                            }
-                        }
-                        
 
-                        //分合约计算出盘口数据并对盘口进行判断
-                        for (int i = 0; i < optionCode.Count; i++)
-                        {
-                            int code = optionCode[i];
-                            int codeFurther = optionCodeFurther[i];
-                            int index = optionIndex[code];
-                            int indexFurther = optionIndex[codeFurther];
-                            //如果今天做过止盈止损，就不再开仓。
-                            if (closeCode.Contains(code)==true)
-                            {
-                                continue;
-                            }
-                            int k = 0;
-                            for (k = index+1; k < optionPositionChange[code].Count; k++)
-                            {
-                                if (optionPositionChange[code][k].thisTime>time)
-                                {
-                                    k = k - 1;
-                                    break;
-                                }
-                                optionPositionShot[code] = PositionShot.GetPositionShot(optionPositionShot[code], optionPositionChange[code][k]);
-                            }
-                            optionIndex[code] = k;
-                            k = 0;
-                            for (k = indexFurther + 1; k < optionPositionChange[codeFurther].Count; k++)
-                            {
-                                if (optionPositionChange[codeFurther][k].thisTime > time)
-                                {
-                                    k = k - 1;
-                                    break;
-                                }
-                                optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], optionPositionChange[codeFurther][k]);
-                            }
-                            optionIndex[codeFurther] = k;
-                            double price = optionPositionShot[code].bid[0];
-                            int volumn= optionPositionShot[code].bidv[0];
-                            double priceFurther = optionPositionShot[codeFurther].ask[0];
-                            int volumnFurther = optionPositionShot[codeFurther].askv[0];
-                            bool open = false;
-                            if (etfPrice*price*volumn*priceFurther*volumnFurther>0)
-                            {
-                                OptionCodeInformation myOptionCode0 = new OptionCodeInformation(code);
-                                open = Judgement(etfPrice,price, priceFurther, expiry0, expiryFurther0,myOptionCode0.GetOptionStrike(), myOptionCode0.GetOptionType());
-                            }
-                            //如果满足开仓条件，就进行开仓的操作
-                            #region 开仓
-                            if (open == true)
-                            {
-                                optionHold nowHold = new optionHold();
-                                optionHold nowHoldFurther = new optionHold();
-                                nowHold.price = price;
-                                nowHold.position = -Math.Min(volumn, volumnFurther);
-                                nowHoldFurther.price = priceFurther;
-                                nowHoldFurther.position = -nowHold.position;
-                                //记录开仓的逐笔数据，按时间日期分类。
-                                myHoldStatus.InsertTradeStatus(code, dateIndex, timeIndex, nowHold.price, nowHold.position);
-                                myHoldStatus.InsertTradeStatus(codeFurther, dateIndex, timeIndex, nowHoldFurther.price,nowHoldFurther.position);
-                                //记录开仓的逐笔数据，按期权合约代码分类。
-                                myHoldStatus.InsertTradeStatusOrderByCode(code, today, time, nowHold.price, nowHold.position);
-                                myHoldStatus.InsertTradeStatusOrderByCode(codeFurther, today, time, nowHoldFurther.price, nowHoldFurther.position);
-                                totalCash += nowHoldFurther.position * ((price - priceFurther) * 10000 - 2.3*2);
-                                deltaCash+= nowHoldFurther.position * ((price - priceFurther) * 10000 - 2.3 * 2);
-                                fee += nowHoldFurther.position * 2.3 * 2;
-                                if (myHold.ContainsKey(code) == false)
-                                {
-                                    myHold.Add(code, nowHold);
-                                }
-                                else
-                                {
-                                    optionHold oldHold = myHold[code];
-                                    int totalPosition = oldHold.position + nowHold.position;
-                                    if (totalPosition == 0)
-                                    {
-                                        myHold.Remove(code);
-                                    }
-                                    else
-                                    {
-                                        nowHold.price = (oldHold.price * oldHold.position + nowHold.price * nowHold.position) / totalPosition;
-                                        nowHold.position = totalPosition;
-                                        myHold[code] = nowHold;
-                                    }
-                                }
-                                if (myHold.ContainsKey(codeFurther) == false)
-                                {
-                                    myHold.Add(codeFurther, nowHoldFurther);
-                                }
-                                else
-                                {
-                                    optionHold oldHold = myHold[codeFurther];
-                                    int totalPosition = oldHold.position + nowHoldFurther.position;
-                                    if (totalPosition == 0)
-                                    {
-                                        myHold.Remove(codeFurther);
-                                    }
-                                    else
-                                    {
-                                        nowHoldFurther.price = (oldHold.price * oldHold.position + nowHoldFurther.price * nowHoldFurther.position) / totalPosition;
-                                        nowHoldFurther.position = totalPosition;
-                                        myHold[codeFurther] = nowHoldFurther;
-                                    }
-                                }
-                                //对盘口价格产生了影响
-                                positionChange myChange = new positionChange(optionPositionShot[code].time, time);
-                                positionStatus myChange0 = new positionStatus();
-                                myChange0.price = price;
-                                myChange0.volumn = -Math.Min(volumn, volumnFurther);
-                                myChange.bidChange.Add(myChange0);
-                                optionPositionShot[code]= PositionShot.GetPositionShot(optionPositionShot[code], myChange);
-                                positionChange myChangeFurther = new positionChange(optionPositionShot[codeFurther].time, time);
-                                positionStatus myChangeFurther0 = new positionStatus();
-                                myChangeFurther0.price =priceFurther;
-                                myChangeFurther0.volumn = -Math.Min(volumn, volumnFurther);
-                                myChangeFurther.askChange.Add(myChangeFurther0);
-                                optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], myChangeFurther);
-                            }
-                            #endregion
-                            
-                        }
-                    }
-                }
-                #endregion
+                 }
+                #endregion 
                    
                 //对今日的持仓进行清理，如果持仓为0就去除该项记录。
-                myHoldKey = new List<int>();
+                List<int> myHoldKey = new List<int>();
                 myHoldKey.AddRange(myHold.Keys);
                 foreach (var myKey in myHoldKey)
                 {

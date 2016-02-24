@@ -29,7 +29,7 @@ namespace timeSpread
     {
         static void Main(string[] args)
         {
-            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150709, 20150731, 93000000, 150000000);
+            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150713, 20150713, 93000000, 150000000);
             myAnalysis.TimeSpreadAnalysis();
             myAnalysis.RecordTradeStatusList();
             Console.WriteLine(myAnalysis.CheckTradeStatusList());
