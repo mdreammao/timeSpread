@@ -242,7 +242,7 @@ namespace timeSpread
                 return 0;
             }
             double price = shot.bid[0];
-            int volumn = shotFurther.bidv[0];
+            int volumn = shot.bidv[0];
             double priceFurther = shotFurther.ask[0];
             int volumnFurther = shotFurther.askv[0];
             bool open = false;
@@ -439,7 +439,7 @@ namespace timeSpread
                 #region 逐tick进行开仓以及平仓的判断。
                 //按时间的下标进行遍历，4小时对应28800个tick，忽略最后3分钟必定进行集合竞价的时间段。当然，具体的遍历时间可以具体讨论。
                 double etfPrice = 0;//etf价格从tick0开始遍历
-                //在同一个tick里面，不能刚开仓就平仓，记录平仓发生时刻的时间下标。
+                //在同一个tick里面，不能刚平仓就开仓，记录平仓发生时刻的时间下标。
                 Dictionary<int, int> closeTimeIndex = new Dictionary<int, int>();
                 for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
                 {
@@ -460,7 +460,7 @@ namespace timeSpread
                         //合约到日期不再范围之内的不予考虑
                         int expiry = optionExpiry[code];
                         int expiryFurther = optionExpiry[codeFurther];
-                        if ((expiry < mypara.expriyMinLimit || expiry > mypara.expriyMaxLimit) && myHold[code].position==0)
+                        if ((expiry<mypara.expriyMinLimit || expiry>mypara.expriyMaxLimit) && myHold[code].position==0) //如果没有持仓就不用考虑平仓的问题。
                         {
                             continue;
                         }
@@ -523,7 +523,7 @@ namespace timeSpread
                         }
                         //如果到日期满足跨期价差的条件，进行开仓的判断
                         int openVolumn = 0;
-                        if (closeTimeIndex.ContainsKey(code)==false || closeTimeIndex[code]>timeIndex+600*2)
+                        if (closeTimeIndex.ContainsKey(code)==false || closeTimeIndex[code]<timeIndex-600*2)
                         {
                             openVolumn = GetOptionOpenVolumn(etfPrice, optionStrike[code], optionType[code], optionPositionShot[code], optionPositionShot[codeFurther], expiry, expiryFurther, mypara);
                         }
