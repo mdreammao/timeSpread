@@ -273,7 +273,7 @@ namespace timeSpread
             {
                 double price = shot.ask[0];
                 double priceFurther = shotFurther.bid[0];
-                if ((priceFurther-price)/(optionFurther.price-option.price)>para.profitStopRatio || (priceFurther - price) / (optionFurther.price - option.price) < para.lossStopRatio || expiry<=1)
+                if (((priceFurther-price)/(optionFurther.price-option.price)>para.profitStopRatio && ((priceFurther - price) - (optionFurther.price - option.price)) < -0.02 )|| ((priceFurther - price) / (optionFurther.price - option.price) < para.lossStopRatio && ((priceFurther - price) - (optionFurther.price - option.price))<-0.02) || expiry<=1)
                 {
                     volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
                 }
@@ -365,6 +365,8 @@ namespace timeSpread
                 Dictionary<int, int> optionIndex = new Dictionary<int, int>();
                 //记录了期权合约距离到期的日期
                 Dictionary<int, int> optionExpiry = new Dictionary<int, int>();
+                //记录每日参与交易的期权合约代码
+                List<int> codeName = new List<int>();
 
                 //第一步，选取今日应当关注的合约代码，包括平价附近的期权合约以及昨日遗留下来的持仓。其中，平价附近的期权合约必须满足交易日的需求，昨日遗留下来的持仓必须全部囊括。近月合约列入code，远月合约列入codeFurther。
                 //注意，某些合约既要进行开仓判断又要进行平仓判断。
@@ -508,6 +510,12 @@ namespace timeSpread
                                 totalCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
                                 deltaCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
                                 fee += volumn * 2.3 * 2;
+                                //记录参加交易的合约代码
+                                if (codeName.Contains(code)==false)
+                                {
+                                    codeName.Add(code);
+                                    codeName.Add(codeFurther);
+                                }
                                 //记录当日平仓时刻
                                 if (closeTimeIndex.ContainsKey(code)==false)
                                 {
@@ -558,6 +566,12 @@ namespace timeSpread
                             totalCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
                             deltaCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
                             fee += openVolumn * 2.3 * 2;
+                            //记录参加交易的合约代码
+                            if (codeName.Contains(code) == false)
+                            {
+                                codeName.Add(code);
+                                codeName.Add(codeFurther);
+                            }
                         }
                     }
 
@@ -574,6 +588,8 @@ namespace timeSpread
                         myHold.Remove(myKey);
                     }
                 }
+                //将今日参与交易的期权合约代码记录下来
+                myHoldStatus.codeNameList.Add(today, codeName);
 
                 #region 计算，记录并显示当日交易情况，持仓情况
                 //将今日持仓情况存入列表。之后才可以根据该头寸计算保证金，希腊值等。

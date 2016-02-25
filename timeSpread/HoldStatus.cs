@@ -40,6 +40,10 @@ namespace timeSpread
         /// </summary>
         public SortedDictionary<int, Dictionary<int, optionHold>> positionStatusList = new SortedDictionary<int, Dictionary<int, optionHold>>();
         /// <summary>
+        /// 记录每一天参与交易的期权合约代码的名称。<日期，list<期权合约代码>>
+        /// </summary>
+        public Dictionary<int, List<int>> codeNameList = new Dictionary<int, List<int>>();
+        /// <summary>
         /// 记录每日交易情况的三维数组。[日期，时间] <期权合约代码,期权头寸情况>。主要为了记录逐笔数据的方便。
         /// </summary>
         public Dictionary<int, optionHold>[,] tradeStatusList = new Dictionary<int, optionHold>[500,28800];
@@ -171,7 +175,8 @@ namespace timeSpread
                 int today = myTradeDays[dateIndex];
                 List<int> myHoldKey = new List<int>();
                 myHoldKey.AddRange(positionStatusList[today].Keys);
-                List<int> Result = myHoldKey.Union(myPreHoldKey).ToList<int>();          //剔除重复项 
+                //List<int> Result = myHoldKey.Union(myPreHoldKey).ToList<int>();          //剔除重复项 
+                List<int> Result = codeNameList[today];
                 for (int timeIndex = 1; timeIndex < 28800; timeIndex++)
                 {
                     List<string> printStream0 = new List<string>();
