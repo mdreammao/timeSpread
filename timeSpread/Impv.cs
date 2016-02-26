@@ -69,6 +69,10 @@ namespace timeSpread
                 Console.WriteLine("duration Wrong!");
                 return 0;
             }
+            if (sigma==0)
+            {
+                return (optionType == "认购") ? 1 : -1;
+            }
             double delta = 0;
             double durationByYear =(double)duration / 252;
             double d1 = (Math.Log(etfPrice / strike) + (r + sigma * sigma / 2) * durationByYear) / (sigma *Math.Sqrt(durationByYear));
@@ -182,6 +186,10 @@ namespace timeSpread
         private static double sigmaOfCall(double callPrice, double spotPrice, double strike, double duration, double r)
         {
             double sigma = 1, sigmaold = 1;
+            if (callPrice<spotPrice-strike*Math.Exp(-r*duration))
+            {
+                return 0;
+            }
             for (int num = 0; num < 10; num++)
             {
                 sigmaold = sigma;
@@ -194,10 +202,10 @@ namespace timeSpread
                 {
                     break;
                 }
-                if (sigma > 3)
-                {
-                    return 0;
-                }
+            }
+            if (sigma>3 || sigma<0)
+            {
+                sigma = 0;
             }
             return sigma;
         }
@@ -213,6 +221,10 @@ namespace timeSpread
         private static double sigmaOfPut(double putPrice, double spotPrice, double strike, double duration, double r)
         {
             double sigma = 1, sigmaold = 1;
+            if (strike*Math.Exp(-r*duration)-spotPrice>putPrice)
+            {
+                return 0;
+            }
             for (int num = 0; num < 10; num++)
             {
                 sigmaold = sigma;
@@ -225,10 +237,10 @@ namespace timeSpread
                 {
                     break;
                 }
-                if (sigma > 3)
-                {
-                    return 0;
-                }
+            }
+            if (sigma > 3 || sigma < 0)
+            {
+                sigma = 0;
             }
             return sigma;
         }

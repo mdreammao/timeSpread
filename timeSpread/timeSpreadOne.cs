@@ -283,7 +283,7 @@ namespace timeSpread
                 double spreadPriceByLastPrice = lastPriceFurther - lastPrice;
                 //判断止盈止损的核心部分。
                 //首先判断止损部分。
-                if (spreadPriceByLastPrice/spreadPriceCost< para.lossStopRatio && spreadPriceByShot/spreadPriceCost< para.lossStopRatio && spreadPriceByLastPrice - spreadPriceCost<0.02)
+                if (spreadPriceByLastPrice/spreadPriceCost< para.lossStopRatio && spreadPriceByShot/spreadPriceCost< para.lossStopRatio && duration<=3)
                 {
                     volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
                 }
