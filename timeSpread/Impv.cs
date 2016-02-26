@@ -14,19 +14,19 @@ namespace timeSpread
         /// <param name="etfPrice">50etf价格</param>
         /// <param name="optionPrice">期权价格</param>
         /// <param name="strike">期权行权价</param>
-        /// <param name="expiry">期权到日期</param>
+        /// <param name="duration">期权到日期</param>
         /// <param name="r">无风险利率</param>
         /// <param name="optionType">期权类型区分看涨还是看跌</param>
         /// <returns>返回隐含波动率</returns>
-        public static  double sigma(double etfPrice,double optionPrice,double strike,int expiry,double r,string optionType)
+        public static  double sigma(double etfPrice,double optionPrice,double strike,int duration,double r,string optionType)
         {
             if (optionType.Equals("认购"))
             {
-                return sigmaOfCall(optionPrice, etfPrice, strike, ((double)expiry)/252.0, r);
+                return sigmaOfCall(optionPrice, etfPrice, strike, ((double)duration)/252.0, r);
             }
             else if (optionType.Equals("认沽"))
             {
-                return sigmaOfPut(optionPrice, etfPrice, strike, ((double)expiry)/252.0, r);
+                return sigmaOfPut(optionPrice, etfPrice, strike, ((double)duration)/252.0, r);
             }
             return 0;
         }
@@ -36,19 +36,19 @@ namespace timeSpread
         /// <param name="etfPrice">50etf价格</param>
         /// <param name="sigma">隐含波动率</param>
         /// <param name="strike">期权行权价格</param>
-        /// <param name="expiry">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <param name="optionType">期权类型看涨还是看跌</param>
         /// <returns>返回期权理论价格</returns>
-        public static  double optionPrice(double etfPrice, double sigma, double strike, int expiry, double r, string optionType)
+        public static double optionPrice(double etfPrice, double sigma, double strike, int duration, double r, string optionType)
         {
             if (optionType.Equals("认购"))
             {
-                return callPrice(etfPrice, strike, sigma, ((double)expiry) / 252.0, r);
+                return callPrice(etfPrice, strike, sigma, ((double)duration) / 252.0, r);
             }
             else if (optionType.Equals("认沽"))
             {
-                return putPrice(etfPrice, strike, sigma, ((double)expiry) / 252.0, r);
+                return putPrice(etfPrice, strike, sigma, ((double)duration) / 252.0, r);
             }
             return 0.0;
         }
@@ -58,20 +58,20 @@ namespace timeSpread
         /// <param name="etfPrice">50etf价格</param>
         /// <param name="sigma">隐含波动率</param>
         /// <param name="strike">期权行权价格</param>
-        /// <param name="expiry">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <param name="optionType">期权类型看涨还是看跌</param>
         /// <returns></returns>
-        public static double optionDelta(double etfPrice, double sigma, double strike, int expiry, double r, string optionType)
+        public static double optionDelta(double etfPrice, double sigma, double strike, int duration, double r, string optionType)
         {
-            if (expiry<=0)
+            if (duration<=0)
             {
-                Console.WriteLine("Expiry Wrong!");
+                Console.WriteLine("duration Wrong!");
                 return 0;
             }
             double delta = 0;
-            double expiryByYear =(double)expiry / 252;
-            double d1 = (Math.Log(etfPrice / strike) + (r + sigma * sigma / 2) * expiryByYear) / (sigma *Math.Sqrt(expiryByYear));
+            double durationByYear =(double)duration / 252;
+            double d1 = (Math.Log(etfPrice / strike) + (r + sigma * sigma / 2) * durationByYear) / (sigma *Math.Sqrt(durationByYear));
             if (optionType=="认购")
             {
                 delta = normcdf(d1);
@@ -88,20 +88,20 @@ namespace timeSpread
         /// <param name="etfPrice">50etf价格</param>
         /// <param name="sigma">隐含波动率</param>
         /// <param name="strike">期权行权价格</param>
-        /// <param name="expiry">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <returns></returns>
-        public static double optionGamma(double etfPrice, double sigma, double strike, int expiry, double r)
+        public static double optionGamma(double etfPrice, double sigma, double strike, int duration, double r)
         {
             double gamma = 0;
-            if(expiry <= 0)
+            if(duration <= 0)
             {
-                Console.WriteLine("Expiry Wrong!");
+                Console.WriteLine("duration Wrong!");
                 return 0;
             }
-            double expiryByYear = (double)expiry / 252;
-            double d1 = (Math.Log(etfPrice / strike) + (r + sigma * sigma / 2) * expiryByYear) / (sigma *Math.Sqrt(expiryByYear));
-            gamma = 1 / (Math.Sqrt(2 * Math.PI) * sigma * Math.Sqrt(expiryByYear) * etfPrice) * Math.Exp(-d1 * d1 / 2);
+            double durationByYear = (double)duration / 252;
+            double d1 = (Math.Log(etfPrice / strike) + (r + sigma * sigma / 2) * durationByYear) / (sigma *Math.Sqrt(durationByYear));
+            gamma = 1 / (Math.Sqrt(2 * Math.PI) * sigma * Math.Sqrt(durationByYear) * etfPrice) * Math.Exp(-d1 * d1 / 2);
             return gamma;
         }
         /// <summary>
@@ -138,18 +138,18 @@ namespace timeSpread
         /// <param name="spotPrice">期权标的价格</param>
         /// <param name="strike">期权行权价</param>
         /// <param name="sigma">期权隐含波动率</param>
-        /// <param name="expiration">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <returns>返回看涨期权理论价格</returns>
-        private static double callPrice(double spotPrice, double strike, double sigma, double expiration, double r)
+        private static double callPrice(double spotPrice, double strike, double sigma, double duration, double r)
         {
-            if (expiration==0)
+            if (duration==0)
             {
                 return ((spotPrice - strike) > 0) ? (spotPrice - strike) : 0;
             }
-            double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * expiration) / (sigma * Math.Sqrt(expiration));
-            double d2 = d1 - sigma * Math.Sqrt(expiration);
-            return normcdf(d1) * spotPrice - normcdf(d2) * strike * Math.Exp(-r * expiration);
+            double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * duration) / (sigma * Math.Sqrt(duration));
+            double d2 = d1 - sigma * Math.Sqrt(duration);
+            return normcdf(d1) * spotPrice - normcdf(d2) * strike * Math.Exp(-r * duration);
         }
         /// <summary>
         /// 计算看跌期权理论价格
@@ -157,18 +157,18 @@ namespace timeSpread
         /// <param name="spotPrice">期权标的价格</param>
         /// <param name="strike">期权行权价</param>
         /// <param name="sigma">期权隐含波动率</param>
-        /// <param name="expiration">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <returns>返回看跌期权理论价格</returns>
-        private static double putPrice(double spotPrice, double strike, double sigma, double expiration, double r)
+        private static double putPrice(double spotPrice, double strike, double sigma, double duration, double r)
         {
-            if (expiration == 0)
+            if (duration == 0)
             {
                 return ((strike-spotPrice) > 0) ? (strike- spotPrice) : 0;
             }
-            double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * expiration) / (sigma * Math.Sqrt(expiration));
-            double d2 = d1 - sigma * Math.Sqrt(expiration);
-            return -normcdf(-d1) * spotPrice + normcdf(-d2) * strike * Math.Exp(-r * expiration);
+            double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * duration) / (sigma * Math.Sqrt(duration));
+            double d2 = d1 - sigma * Math.Sqrt(duration);
+            return -normcdf(-d1) * spotPrice + normcdf(-d2) * strike * Math.Exp(-r * duration);
         }
         /// <summary>
         /// 计算看涨期权隐含波动率。利用简单的牛顿法计算期权隐含波动率。在计算中，当sigma大于3，认为无解并返回0
@@ -176,19 +176,19 @@ namespace timeSpread
         /// <param name="callPrice">期权价格</param>
         /// <param name="spotPrice">标的价格</param>
         /// <param name="strike">期权行权价</param>
-        /// <param name="expiration">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <returns>返回隐含波动率</returns>
-        private static double sigmaOfCall(double callPrice, double spotPrice, double strike, double expiration, double r)
+        private static double sigmaOfCall(double callPrice, double spotPrice, double strike, double duration, double r)
         {
             double sigma = 1, sigmaold = 1;
             for (int num = 0; num < 10; num++)
             {
                 sigmaold = sigma;
-                double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * expiration) / (sigma * Math.Sqrt(expiration));
-                double d2 = d1 - sigma * Math.Sqrt(expiration);
-                double f_sigma = normcdf(d1) * spotPrice - normcdf(d2) * strike * Math.Exp(-r * expiration);
-                double df_sigma = spotPrice * Math.Sqrt(expiration) * Math.Exp(-d1 * d1 / 2) / (Math.Sqrt(2 * Math.PI));
+                double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * duration) / (sigma * Math.Sqrt(duration));
+                double d2 = d1 - sigma * Math.Sqrt(duration);
+                double f_sigma = normcdf(d1) * spotPrice - normcdf(d2) * strike * Math.Exp(-r * duration);
+                double df_sigma = spotPrice * Math.Sqrt(duration) * Math.Exp(-d1 * d1 / 2) / (Math.Sqrt(2 * Math.PI));
                 sigma = sigma + (callPrice - f_sigma) / df_sigma;
                 if (Math.Abs(sigma - sigmaold) < 0.0001)
                 {
@@ -207,19 +207,19 @@ namespace timeSpread
         /// <param name="callPrice">期权价格</param>
         /// <param name="spotPrice">标的价格</param>
         /// <param name="strike">期权行权价</param>
-        /// <param name="expiration">期权到期日</param>
+        /// <param name="duration">期权到期日</param>
         /// <param name="r">无风险利率</param>
         /// <returns>返回隐含波动率</returns>
-        private static double sigmaOfPut(double putPrice, double spotPrice, double strike, double expiration, double r)
+        private static double sigmaOfPut(double putPrice, double spotPrice, double strike, double duration, double r)
         {
             double sigma = 1, sigmaold = 1;
             for (int num = 0; num < 10; num++)
             {
                 sigmaold = sigma;
-                double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * expiration) / (sigma * Math.Sqrt(expiration));
-                double d2 = d1 - sigma * Math.Sqrt(expiration);
-                double f_sigma = -normcdf(-d1) * spotPrice + normcdf(-d2) * strike * Math.Exp(-r * expiration);
-                double df_sigma = spotPrice * Math.Sqrt(expiration) * Math.Exp(-d1 * d1 / 2) / (Math.Sqrt(2 * Math.PI));
+                double d1 = (Math.Log(spotPrice / strike) + (r + sigma * sigma / 2) * duration) / (sigma * Math.Sqrt(duration));
+                double d2 = d1 - sigma * Math.Sqrt(duration);
+                double f_sigma = -normcdf(-d1) * spotPrice + normcdf(-d2) * strike * Math.Exp(-r * duration);
+                double df_sigma = spotPrice * Math.Sqrt(duration) * Math.Exp(-d1 * d1 / 2) / (Math.Sqrt(2 * Math.PI));
                 sigma = sigma + (putPrice - f_sigma) / df_sigma;
                 if (Math.Abs(sigma - sigmaold) < 0.0001)
                 {

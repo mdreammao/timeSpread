@@ -71,26 +71,26 @@ namespace timeSpread
         /// <param name="etfPrice">50etf价格</param>
         /// <param name="price">近月期权价格</param>
         /// <param name="priceFurther">远月期权价格</param>
-        /// <param name="expiry0">近月期权到期天数</param>
-        /// <param name="expiryFurther0">远月期权到期天数</param>
+        /// <param name="duration0">近月期权到期天数</param>
+        /// <param name="durationFurther0">远月期权到期天数</param>
         /// <param name="strike">期权行权价</param>
         /// <param name="type">期权类型，看涨还是看跌期权</param>
         /// <returns>返回是否开仓的判断结果</returns>
-        private bool Judgement(double etfPrice,double price,double priceFurther,int expiry0,int expiryFurther0,double strike,string type)
+        private bool Judgement(double etfPrice,double price,double priceFurther,int duration0,int durationFurther0,double strike,string type)
         {
             bool open = false;
             double r = 0.05;
             //利用BS公式计算近月以及远月期权的隐含波动率。并用这2个波动率差值得到近月合约到期时候，期权对应的隐含波动率。
-            double sigma = Impv.sigma(etfPrice, price, strike, expiry0, r, type);
-            double sigmaFurther = Impv.sigma(etfPrice, priceFurther, strike, expiryFurther0, r, type);
-            double sigmaNew = Math.Sqrt(sigma * sigma * ( expiry0) / (expiryFurther0 - expiry0) + sigmaFurther * sigmaFurther * (expiryFurther0 - 2 * expiry0) / (expiryFurther0 - expiry0));
+            double sigma = Impv.sigma(etfPrice, price, strike, duration0, r, type);
+            double sigmaFurther = Impv.sigma(etfPrice, priceFurther, strike, durationFurther0, r, type);
+            double sigmaNew = Math.Sqrt(sigma * sigma * ( duration0) / (durationFurther0 - duration0) + sigmaFurther * sigmaFurther * (durationFurther0 - 2 * duration0) / (durationFurther0 - duration0));
             //利用隐含波动率来估计近月期权合约到期时候50etf的价格，这里使用若干倍的sigma来计算。
-            double etfPriceFurtherUp = etfPrice * Math.Exp(2*sigma * Math.Sqrt(expiry0 / 252.0));
-            double etfPriceFurtherDown= etfPrice * Math.Exp(-2*sigma * Math.Sqrt(expiry0 / 252.0));
-            double noChange = Impv.optionPrice(etfPrice, sigmaNew, strike, expiryFurther0 - expiry0, r, type)- Impv.optionPrice(etfPrice, sigmaNew, strike, 0, r, type);
+            double etfPriceFurtherUp = etfPrice * Math.Exp(2*sigma * Math.Sqrt(duration0 / 252.0));
+            double etfPriceFurtherDown= etfPrice * Math.Exp(-2*sigma * Math.Sqrt(duration0 / 252.0));
+            double noChange = Impv.optionPrice(etfPrice, sigmaNew, strike, durationFurther0 - duration0, r, type)- Impv.optionPrice(etfPrice, sigmaNew, strike, 0, r, type);
             //计算出持有头寸价值的上下限。
-            double up= Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, expiryFurther0 - expiry0, r, type) - Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, 0, r, type);
-            double down = Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, expiryFurther0 - expiry0, r, type) - Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, 0, r, type);
+            double up= Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, 0, r, type);
+            double down = Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, 0, r, type);
             double interestNoChange = noChange - (priceFurther - price);
             double interestUp= up - (priceFurther - price);
             double interestDown=down- (priceFurther - price);
@@ -196,12 +196,12 @@ namespace timeSpread
                     margin += myMargin * Math.Abs(item.Value.position);
                 }
                 //计算希腊值
-                int expiry = OptionCodeInformation.GetTimeSpan(optionCode,today);
-                double sigma = Impv.sigma(etfClose, optionClose, myOption.GetOptionStrike(), expiry, 0.05, myOption.GetOptionType());
-                delta += item.Value.position*10000*etfClose*Impv.optionDelta(etfClose, sigma, myOption.GetOptionStrike(), expiry, 0.05, myOption.GetOptionType());
+                int duration = OptionCodeInformation.GetTimeSpan(optionCode,today);
+                double sigma = Impv.sigma(etfClose, optionClose, myOption.GetOptionStrike(), duration, 0.05, myOption.GetOptionType());
+                delta += item.Value.position*10000*etfClose*Impv.optionDelta(etfClose, sigma, myOption.GetOptionStrike(), duration, 0.05, myOption.GetOptionType());
                 if (sigma>0)
                 {
-                    gamma += 100000000 * item.Value.position * etfClose * etfClose * Impv.optionGamma(etfClose, sigma, myOption.GetOptionStrike(), expiry, 0.05);
+                    gamma += 100000000 * item.Value.position * etfClose * etfClose * Impv.optionGamma(etfClose, sigma, myOption.GetOptionStrike(), duration, 0.05);
                 }
             }
         }
@@ -230,14 +230,14 @@ namespace timeSpread
         /// <param name="type">期权的类型</param>
         /// <param name="shot">近月期权的盘口价格</param>
         /// <param name="shotFurther">远月期权的盘口价格</param>
-        /// <param name="expiry">近月期权的到期日</param>
-        /// <param name="expiryFurther">远月期权的到期日</param>
+        /// <param name="duration">近月期权的到期日</param>
+        /// <param name="durationFurther">远月期权的到期日</param>
         /// <param name="para">开平仓的参数</param>
         /// <returns>返回开仓数量，如果不开仓返回0</returns>
-        private int GetOptionOpenVolumn(double etfPrice,double strike,string type,tradeInformation shot, tradeInformation shotFurther, int expiry, int expiryFurther,parameter para)
+        private int GetOptionOpenVolumn(double etfPrice,double strike,string type,tradeInformation shot, tradeInformation shotFurther, int duration, int durationFurther,parameter para)
         {
             int openVolumn = 0;
-            if (expiry<para.expriyMinLimit || expiry>para.expriyMaxLimit)
+            if (duration<para.expriyMinLimit || duration>para.expriyMaxLimit)
             {
                 return 0;
             }
@@ -248,7 +248,7 @@ namespace timeSpread
             bool open = false;
             if (etfPrice*price * volumn * priceFurther * volumnFurther > 0)
             {
-                open = Judgement(etfPrice, price, priceFurther, expiry, expiryFurther, strike, type);
+                open = Judgement(etfPrice, price, priceFurther, duration, durationFurther, strike, type);
             }
             if (open==true)
             {
@@ -263,21 +263,40 @@ namespace timeSpread
         /// <param name="optionFurther">远月合约历史持仓</param>
         /// <param name="shot">近月合约盘口状态</param>
         /// <param name="shotFurther">远月合约盘口状态</param>
-        /// <param name="expiry">近月合约的到期日期</param>
+        /// <param name="duration">近月合约的到期日期</param>
         /// <returns>应该平仓的头寸，如果不平仓则返回0</returns>
-        private int GetOptionCloseVolumn(optionHold option,optionHold optionFurther,tradeInformation shot,tradeInformation shotFurther,int expiry,parameter para)
+        private int GetOptionCloseVolumn(optionHold option,optionHold optionFurther,tradeInformation shot,tradeInformation shotFurther,int duration,parameter para)
         {
             int volumn = 0;
             //在当前情况下，近月合约只能是空头，远月合约是多头。如果以后需要扩展，可以从volume的正负号上体现出来。
             if (option.position<0)
             {
+                //历史开仓成本的价格
+                double spreadPriceCost = optionFurther.price - option.price;
+                //按照盘口价格计算持有头寸的价格，但盘口价格波动很厉害，还需要其他价格辅助。
                 double price = shot.ask[0];
                 double priceFurther = shotFurther.bid[0];
-                if (((priceFurther-price)/(optionFurther.price-option.price)>para.profitStopRatio && ((priceFurther - price) - (optionFurther.price - option.price)) < -0.02 )|| ((priceFurther - price) / (optionFurther.price - option.price) < para.lossStopRatio && ((priceFurther - price) - (optionFurther.price - option.price))<-0.02) || expiry<=1)
+                double spreadPriceByShot = priceFurther - price;
+                //按照最后成交价计算的持有头寸的价格。
+                double lastPrice = shot.lastPrice;
+                double lastPriceFurther = shotFurther.lastPrice;
+                double spreadPriceByLastPrice = lastPriceFurther - lastPrice;
+                //判断止盈止损的核心部分。
+                //首先判断止损部分。
+                if (spreadPriceByLastPrice/spreadPriceCost< para.lossStopRatio && spreadPriceByShot/spreadPriceCost< para.lossStopRatio && spreadPriceByLastPrice - spreadPriceCost<0.02)
                 {
                     volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
                 }
-
+                //接着判断止盈部分。
+                else if (spreadPriceByLastPrice / spreadPriceCost > para.profitStopRatio && spreadPriceByShot / spreadPriceCost > para.profitStopRatio)
+                {
+                    volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
+                }
+                //最后判断期权是否块到期，接近到期必须强制平仓。
+                else if (duration <= 1)
+                {
+                    volumn = Math.Min(Math.Min(shot.askv[0], shotFurther.bidv[0]), Math.Abs(option.position));
+                }
             }
             return volumn;
         }
@@ -308,7 +327,7 @@ namespace timeSpread
         /// <returns>返回盘口变动的情况</returns>
         private positionChange GetShotChange(int lastTime,int thisTime,double price,int volumn,string type)
         {
-            positionChange myChange = new positionChange(lastTime,thisTime);
+            positionChange myChange = new positionChange(lastTime,thisTime,price);
             positionStatus myChange0 = new positionStatus();
             myChange0.price = price;
             myChange0.volumn = -volumn;
@@ -364,7 +383,7 @@ namespace timeSpread
                 //记录了期权合约遍历的位置，避免先开仓后平仓的情况。
                 Dictionary<int, int> optionIndex = new Dictionary<int, int>();
                 //记录了期权合约距离到期的日期
-                Dictionary<int, int> optionExpiry = new Dictionary<int, int>();
+                Dictionary<int, int> optionduration = new Dictionary<int, int>();
                 //记录每日参与交易的期权合约代码
                 List<int> codeName = new List<int>();
 
@@ -382,8 +401,8 @@ namespace timeSpread
                 //记入今日平价附近的期权合约。
                 foreach (var code in optionAtTheMoney)
                 {
-                    int expiry = OptionCodeInformation.GetTimeSpan(code, today);
-                    if (expiry>=mypara.expriyMinLimit && expiry<=mypara.expriyMaxLimit)
+                    int duration = OptionCodeInformation.GetTimeSpan(code, today);
+                    if (duration>=mypara.expriyMinLimit && duration<=mypara.expriyMaxLimit)
                     {
                         int codeFurther = OptionCodeInformation.GetFurtherOption(code, today);
                         if (codeFurther!=0 && optionCode.Contains(code)==false)
@@ -414,7 +433,7 @@ namespace timeSpread
                     tradeInformation positionInitial = new tradeInformation(0,0);
                     optionPositionShot.Add(code, positionInitial);
                     optionIndex.Add(code, 0);
-                    optionExpiry.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
+                    optionduration.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
                     if (optionStrike.ContainsKey(code)==false)
                     {
                         OptionCodeInformation option = new OptionCodeInformation(code);
@@ -429,7 +448,7 @@ namespace timeSpread
                     tradeInformation positionInitial = new tradeInformation(0, 0);
                     optionPositionShot.Add(code, positionInitial);
                     optionIndex.Add(code, 0);
-                    optionExpiry.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
+                    optionduration.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
                     if (optionStrike.ContainsKey(code) == false)
                     {
                         OptionCodeInformation option = new OptionCodeInformation(code);
@@ -460,9 +479,9 @@ namespace timeSpread
                         int codeFurther = optionCodeFurther[codeListIndex];
                         
                         //合约到日期不再范围之内的不予考虑
-                        int expiry = optionExpiry[code];
-                        int expiryFurther = optionExpiry[codeFurther];
-                        if ((expiry<mypara.expriyMinLimit || expiry>mypara.expriyMaxLimit) && myHold[code].position==0) //如果没有持仓就不用考虑平仓的问题。
+                        int duration = optionduration[code];
+                        int durationFurther = optionduration[codeFurther];
+                        if ((duration<mypara.expriyMinLimit || duration>mypara.expriyMaxLimit) && myHold[code].position==0) //如果没有持仓就不用考虑平仓的问题。
                         {
                             continue;
                         }
@@ -481,13 +500,13 @@ namespace timeSpread
                         int code = optionCode[codeListIndex];
                         int codeFurther = optionCodeFurther[codeListIndex];
                         //记录合约到期日
-                        int expiry = optionExpiry[code];
-                        int expiryFurther = optionExpiry[codeFurther];
+                        int duration = optionduration[code];
+                        int durationFurther = optionduration[codeFurther];
                         //如果仓位未平就需要平仓判断。
                         if (myHold.ContainsKey(code) && myHold[code].position!=0)
                         {
                             //为简单起见这里只做关于成本的止盈止损判断。
-                            int volumn = GetOptionCloseVolumn(myHold[code], myHold[codeFurther], optionPositionShot[code], optionPositionShot[codeFurther], expiry, mypara);
+                            int volumn = GetOptionCloseVolumn(myHold[code], myHold[codeFurther], optionPositionShot[code], optionPositionShot[codeFurther], duration, mypara);
                             //若通过判断得到的平仓头寸大于0，这进行状态变化的计算以及记录。
                             if (volumn>0) 
                             {
@@ -533,7 +552,7 @@ namespace timeSpread
                         int openVolumn = 0;
                         if (closeTimeIndex.ContainsKey(code)==false || closeTimeIndex[code]<timeIndex-600*2)
                         {
-                            openVolumn = GetOptionOpenVolumn(etfPrice, optionStrike[code], optionType[code], optionPositionShot[code], optionPositionShot[codeFurther], expiry, expiryFurther, mypara);
+                            openVolumn = GetOptionOpenVolumn(etfPrice, optionStrike[code], optionType[code], optionPositionShot[code], optionPositionShot[codeFurther], duration, durationFurther, mypara);
                         }
                         if (openVolumn>0)
                         {

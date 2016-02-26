@@ -274,7 +274,7 @@ namespace timeSpread
             List<int> choosedOptionCode = new List<int>();
             double upBound = (maxEtfPrice >= 3) ? maxEtfPrice + 0.1 : maxEtfPrice + 0.05;
             double lowerBound = (minEtfPrice >= 3) ? minEtfPrice - 0.1 : minEtfPrice - 0.05;
-            double expiry =999;
+            double duration =999;
             if (myOptionInformation == null)
             {
                 OptionCodeInformation temp = new OptionCodeInformation();
@@ -282,20 +282,20 @@ namespace timeSpread
             }
             foreach (var item in myOptionInformation)
             {
-                int thisExpiry = OptionCodeInformation.GetTimeSpan(item.optionCode, today);
-                if (thisExpiry <= expiry && thisExpiry>0)
+                int thisduration = OptionCodeInformation.GetTimeSpan(item.optionCode, today);
+                if (thisduration <= duration && thisduration>0)
                 {
-                    expiry = thisExpiry;
+                    duration = thisduration;
                 }
             }
             foreach (var item in myOptionInformation)
             {
                 if ((item.strike > lowerBound && item.strike < upBound) && (item.enddate >= today) && (item.startdate <= today))
                 {
-                    int thisExpiry = OptionCodeInformation.GetTimeSpan(item.optionCode, today);
-                    if (thisExpiry == expiry)
+                    int thisduration = OptionCodeInformation.GetTimeSpan(item.optionCode, today);
+                    if (thisduration == duration)
                     {
-                        expiry = thisExpiry;
+                        duration = thisduration;
                         choosedOptionCode.Add(item.optionCode);
                     }
 

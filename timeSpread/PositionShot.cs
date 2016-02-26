@@ -18,11 +18,13 @@ namespace timeSpread
     struct positionChange
     {
         public int lastTime,thisTime;
+        public double lastPrice;
         public List<positionStatus> askChange,bidChange;
-        public positionChange(int lastTime,int thisTime)
+        public positionChange(int lastTime,int thisTime,double lastPrice=0)
         {
             this.lastTime = lastTime;
             this.thisTime = thisTime;
+            this.lastPrice = lastPrice;
             askChange = new List<positionStatus>();
             bidChange = new List<positionStatus>();
         }
@@ -57,8 +59,9 @@ namespace timeSpread
             nextShot.askv = new int[5];
             nextShot.bid = new double[5];
             nextShot.bidv = new int[5];
-            positionChange nextChange = new positionChange(nowChange.lastTime,nowChange.thisTime);
+            positionChange nextChange = new positionChange(nowChange.lastTime,nowChange.thisTime,nowChange.lastPrice);
             nextShot.time = nowChange.thisTime;
+            nextShot.lastPrice = nowChange.lastPrice;
             //分别处理ask以及bid部分的价格变化。利用前一状态的盘口价格，叠加上当前盘口价格变动，得到下一状态的盘口价格。数据结构使用哈希表便于理解和处理。
             #region 处理ask部分新方法
             SortedDictionary<double, int> askModified = new SortedDictionary<double, int>();
@@ -147,7 +150,7 @@ namespace timeSpread
             {
                 tradeInformation lastStatus = tickData[i - 1];
                 tradeInformation thisStatus = tickData[i];
-                positionChange change = new positionChange(lastStatus.time,thisStatus.time);
+                positionChange change = new positionChange(lastStatus.time,thisStatus.time,thisStatus.lastPrice);
                 //分别处理ask和bid的盘口价格，通过分析前一状态的盘口价格和后一状态的盘口价格，得到两个盘口价格之间的具体变动信息。数据结构使用哈希表便于理解和处理。
                 #region ask处理的新方法
                 SortedDictionary<double, int> askChange = new SortedDictionary<double, int>();

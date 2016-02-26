@@ -80,6 +80,7 @@
     <Compile Include="Technique.cs" />
     <Compile Include="timeSpreadOne.cs" />
     <Compile Include="TradeDay.cs" />
+    <Compile Include="VolatilityManagement.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
