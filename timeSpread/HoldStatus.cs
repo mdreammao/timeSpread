@@ -6,33 +6,6 @@ using System.Threading.Tasks;
 
 namespace timeSpread
 {
-    /// <summary>
-    /// 记录持仓头寸以及开仓的成本等信息的结构体。
-    /// </summary>
-    struct optionHold
-    {
-        public double price;
-        public int position;
-    }
-    struct optionHoldWithTime
-    {
-        public int date;
-        public int time;
-        public double price;
-        public int position;
-    }
-    struct asset
-    {
-        public double cash;
-        public double margin;
-        public double fee;
-        public double optionValue;
-    }
-    struct greek
-    {
-        public double delta;
-        public double gamma;
-    }
     class HoldStatus
     {
         /// <summary>

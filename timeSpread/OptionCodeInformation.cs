@@ -4,19 +4,7 @@ using System.Data.SqlClient;
 
 namespace timeSpread
 {
-    /// <summary>
-    /// 存储期权基本信息的结构体。包括期权合约代码，期权名称，期权类型，行权价，开始时间，结束时间。
-    /// </summary>
-    struct optionInformation
-    {
-        public int optionCode;
-        public string optionName;
-        public string optionType;
-        public double strike;
-        public int startdate;
-        public int enddate;
-
-    }
+    
     
     /// <summary>
     /// 记录期权基本信息的重要类类型。记录的数据主要包括期权合约代码，期权类型，开始时间，结束时间，行权价。还包括一个静态的表myOptionInformation记录所有的期权合约信息。

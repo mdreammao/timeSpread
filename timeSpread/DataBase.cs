@@ -4,17 +4,7 @@ using System.Data.SqlClient;
 
 namespace timeSpread
 {
-    /// <summary>
-    /// 记录期权合约基本信息，包括合约代码，合约名称，行权价，开始时间，到期时间
-    /// </summary>
-    struct basicInformation
-    {
-        public int optionCode;
-        public string optionName;
-        public double optionStrike;
-        public int startDate;
-        public int endDate;
-    }
+   
     /// <summary>
     /// 提供读取数据服务。利用sqlconnection连接sql服务器，并提供若干读取数据的方法。
     /// </summary>

@@ -4,14 +4,7 @@ using System.Linq;
 
 namespace timeSpread
 {
-    /// <summary>
-    /// 包含挂单价格和挂单量的结构体。
-    /// </summary>
-    struct positionStatus
-    {
-        public double price;
-        public int volumn;
-    }
+    
     /// <summary>
     /// 存储盘口变动信息的结构体。包括前交易时间，交易时间，买报价和卖报价的信息。
     /// </summary>

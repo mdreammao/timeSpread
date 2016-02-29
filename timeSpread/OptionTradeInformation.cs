@@ -4,25 +4,7 @@ using System.Data.SqlClient;
 
 namespace timeSpread
 {
-    /// <summary>
-    /// 记录价格信息的结构体。包括交易时间，最新价，五档的买价买量，五档的卖价卖量。
-    /// </summary>
-    struct tradeInformation
-    {
-        public int time;
-        public double lastPrice;
-        public double[] ask, bid;
-        public int[] askv, bidv;
-        public tradeInformation(int time,double price)
-        {
-            this.time = time;
-            lastPrice = price;
-            ask = new double[5];
-            bid = new double[5];
-            askv = new int[5];
-            bidv = new int[5];
-        }
-    }
+    
     /// <summary>
     /// 获取期权合约的交易数据。提供方法读取盘口tick数据。
     /// </summary>

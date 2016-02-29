@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
+
 namespace timeSpread
 {
-   
+       
     /// <summary>
     /// 根据BS公式按期权价格计算隐含波动率以及按隐含波动率计算期权理论价格。
     /// 提供了两个静态方法，分别用来计算隐含波动率和期权理论价格
@@ -244,5 +246,75 @@ namespace timeSpread
             }
             return sigma;
         }
+
+        /// <summary>
+        /// 计算当日持仓的情况
+        /// </summary>
+        /// <param name="today">日期</param>
+        /// <param name="myHold">今日持仓情况</param>
+        /// <param name="fee">今日开平仓产生的费用</param>
+        /// <param name="totalCash">今日剩余总资金</param>
+        /// <returns>当日持仓状态</returns>
+        public static portfolioStatus ComputePositionStatus(int today, Dictionary<int, optionHold> myHold,double fee,double totalCash)
+        {
+            portfolioStatus myPortfolio = new portfolioStatus();
+            //期权维持保证金。
+            double margin = 0;
+            //期权期末权益。
+            double value = 0;
+            //期权期初权益。
+            double cost = 0;
+            //期权delta值。
+            double delta = 0;
+            //期权gamma值。
+            double gamma = 0;
+            foreach (var item in myHold)
+            {
+                int position = item.Value.position;
+                double openCost = item.Value.price;
+                int optionCode = item.Key;
+                OptionCodeInformation myOption = new OptionCodeInformation(optionCode);
+                double optionClose = myOption.GetOptionClosePirce(today, optionCode);
+                double etfClose = EtfTradeInformation.getEtfCloseInformation(today);
+                //计算期权的持仓价值
+                value += optionClose * 10000 * position;
+                //计算期权的开仓成本
+                cost += -openCost * 10000 * position;
+                //计算维持保证金
+                if (item.Value.position < 0)
+                {
+                    double myMargin;
+                    double optionSettle = myOption.GetOptionSettlePirce(today, myOption.GetOptionCode());
+                    if (myOption.GetOptionType() == "认购")
+                    {
+                        myMargin = optionSettle + Math.Max(0.12 * etfClose - Math.Max(myOption.GetOptionStrike() - etfClose, 0), 0.07 * etfClose) * 10000;
+                    }
+                    else
+                    {
+                        myMargin = Math.Min(optionSettle + Math.Max(0.12 * etfClose - Math.Max(etfClose - myOption.GetOptionStrike(), 0), 0.07 * myOption.GetOptionStrike()), myOption.GetOptionStrike()) * 10000;
+                    }
+                    margin += myMargin * Math.Abs(item.Value.position);
+                }
+                //计算希腊值
+                int duration = OptionCodeInformation.GetTimeSpan(optionCode, today);
+                double sigma = Impv.sigma(etfClose, optionClose, myOption.GetOptionStrike(), duration, 0.05, myOption.GetOptionType());
+                delta += item.Value.position * 10000 * etfClose * Impv.optionDelta(etfClose, sigma, myOption.GetOptionStrike(), duration, 0.05, myOption.GetOptionType());
+                if (sigma > 0)
+                {
+                    gamma += 100000000 * item.Value.position * etfClose * etfClose * Impv.optionGamma(etfClose, sigma, myOption.GetOptionStrike(), duration, 0.05);
+                }
+            }
+            myPortfolio.optionDelta = delta;
+            myPortfolio.optionCost = cost;
+            myPortfolio.optionGamma = gamma;
+            myPortfolio.optionMargin = margin;
+            myPortfolio.optionValue = value;
+            myPortfolio.totalFee += fee;
+            myPortfolio.availableCash = totalCash - margin;
+            myPortfolio.totalCash = totalCash;
+            myPortfolio.portfolioValue = value + totalCash;
+            return myPortfolio;
+        }
+
     }
 }

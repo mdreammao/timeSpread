@@ -24,6 +24,13 @@
 时间：2016-02-25
 版本：v1.2.0
 #######################################################
+1、将每日资金情况以及持仓情况记入本地csv文件。
+2、将结构体写到一起便于管理。
+3、修改了校对交易记录函数的bug。
+修改者：毛衡
+时间：2016-02-29
+版本：v1.2.1
+#######################################################
 **/
 using System;
 using System.Collections.Generic;
@@ -37,7 +44,7 @@ namespace timeSpread
     {
         static void Main(string[] args)
         {
-            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150707, 20150720, 93000000, 150000000);
+            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150209, 20151231, 93000000, 150000000);
             myAnalysis.TimeSpreadAnalysis();
             myAnalysis.RecordTradeStatusList();
             Console.WriteLine(myAnalysis.CheckTradeStatusList());

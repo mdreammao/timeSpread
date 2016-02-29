@@ -72,6 +72,7 @@
     <Compile Include="EtfTradeInformation.cs" />
     <Compile Include="HoldStatus.cs" />
     <Compile Include="Impv.cs" />
+    <Compile Include="myStruct.cs" />
     <Compile Include="OptionCodeInformation.cs" />
     <Compile Include="OptionTradeInformation.cs" />
     <Compile Include="PositionShot.cs" />

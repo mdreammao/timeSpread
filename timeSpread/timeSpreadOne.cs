@@ -5,20 +5,7 @@ using System.Collections.Generic;
 namespace timeSpread
 {
 
-    struct parameter
-    {
-        public int expriyMaxLimit;
-        public int expriyMinLimit;
-        public double lossStopRatio;
-        public double profitStopRatio;
-        public parameter(int max,int min,double loss,double profit)
-        {
-            expriyMaxLimit = max;
-            expriyMinLimit = min;
-            lossStopRatio = loss;
-            profitStopRatio = profit;
-        }
-    }
+    
     /// <summary>
     /// 计算跨期价差收益的类类型。
     /// </summary>
@@ -27,7 +14,11 @@ namespace timeSpread
         /// <summary>
         /// 记录交易记录的文档地址
         /// </summary>
-        public string filePathName = "TradeRecords" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
+        public string tradeRecordPath = "TradeRecords" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
+        /// <summary>
+        /// 记录每日资金和持仓的文档地址
+        /// </summary>
+        public string statusRecordPath = "StatusRecords" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
         /// <summary>
         /// 初始持有的资金。
         /// </summary>
@@ -351,13 +342,8 @@ namespace timeSpread
             myHoldStatus = new HoldStatus();
             //myHold记录每日持仓情况，根据该表可以统计每日资金占用以及头寸的情况。
             Dictionary<int, optionHold> myHold = new Dictionary<int, optionHold>();
-            double optionMargin = 0;
-            double deltaCash = 0;
             double totalCash = this.totalCash;
-            double cashAvailable = 0;
             double fee = 0;
-            double optionValue = 0;
-            double optionCost = 0;
             //初始化记录期权行权价和期权类型的哈希表。该表不随交易日变化而变化。
             Dictionary<int, double> optionStrike = new Dictionary<int, double>();
             Dictionary<int, string> optionType = new Dictionary<int, string>();
@@ -368,11 +354,6 @@ namespace timeSpread
                 //初始化日内的参数
                 int today = myTradeDay.MyTradeDays[dateIndex];
                 fee = 0;
-                deltaCash = 0;
-                optionValue = 0;
-                optionCost = 0;
-                double optionDelta = 0;
-                double optionGamma = 0;
                 myHold = myHoldStatus.GetPositionStatus();
 
 
@@ -527,7 +508,6 @@ namespace timeSpread
                                 optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], GetShotChange(optionPositionShot[codeFurther].time, time, priceFurther, volumn, "bid"));
                                 //记录整体情况
                                 totalCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
-                                deltaCash += volumn * ((priceFurther-price) * 10000 - 2.3 * 2);
                                 fee += volumn * 2.3 * 2;
                                 //记录参加交易的合约代码
                                 if (codeName.Contains(code)==false)
@@ -583,7 +563,6 @@ namespace timeSpread
                             optionPositionShot[codeFurther] = PositionShot.GetPositionShot(optionPositionShot[codeFurther], GetShotChange(optionPositionShot[codeFurther].time, time, priceFurther, openVolumn, "ask"));
                             //记录整体情况
                             totalCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
-                            deltaCash += openVolumn * ((price - priceFurther) * 10000 - 2.3 * 2);
                             fee += openVolumn * 2.3 * 2;
                             //记录参加交易的合约代码
                             if (codeName.Contains(code) == false)
@@ -614,15 +593,15 @@ namespace timeSpread
                 //将今日持仓情况存入列表。之后才可以根据该头寸计算保证金，希腊值等。
                 myHoldStatus.InsertPositionStatus(today, myHold);
                 //计算当日持仓状态,包括维持保证金，期权的当前价值，开仓成本，希腊值等
-                ComputePositionStatus(today, myHold, ref optionMargin, ref optionValue, ref optionCost, ref optionDelta, ref optionGamma);
-                //计算当日收盘之后的可用资金
-                cashAvailable = totalCash - optionMargin;
+                portfolioStatus myPortfolio = Impv.ComputePositionStatus(today, myHold, fee, totalCash);
                 //将当天的情况存储进入myHoldStatus
-                myHoldStatus.InsertCashStatus(today, cashAvailable, optionMargin, fee, optionValue);
-                myHoldStatus.InsertGreekStatus(today, optionDelta, optionGamma);
+                myHoldStatus.InsertCashStatus(today, myPortfolio.availableCash, myPortfolio.optionMargin, fee, myPortfolio.optionValue);
+                myHoldStatus.InsertGreekStatus(today, myPortfolio.optionDelta, myPortfolio.optionGamma);
+                //将当天的持仓情况存入本地csv文件
+                RecordPortfolioStatusDaily(today, myPortfolio);
                 //在屏幕上输出每日的情况。
-                Console.WriteLine("{0},optionValue: {1}, Margin: {2}, Cash: {3}, total: {4}", today, Math.Round(optionValue), Math.Round(optionMargin), Math.Round(cashAvailable), Math.Round(totalCash + optionValue));
-                Console.WriteLine("          delta: {0}, gamma: {1}, optionCost: {2} ", Math.Round(optionDelta), Math.Round(optionGamma), Math.Round(optionCost));
+                Console.WriteLine("{0}, Margin: {1}, cashAvailable: {2}, total: {3}", today, Math.Round(myPortfolio.optionMargin), Math.Round(myPortfolio.availableCash), Math.Round(myPortfolio.portfolioValue));
+                Console.WriteLine("          delta: {0}, gamma: {1}, optionCost: {2} ,optionValue:{3}", Math.Round(myPortfolio.optionDelta), Math.Round(myPortfolio.optionGamma), Math.Round(myPortfolio.optionCost), Math.Round(myPortfolio.optionValue));
                 #endregion
 
             }
@@ -640,16 +619,36 @@ namespace timeSpread
             else
             {
                 //将逐笔交易记录存入csv文件
-                myHoldStatus.RecordTradeStatusList(filePathName, myTradeDay.MyTradeDays, TradeDay.MyTradeTicks);
+                myHoldStatus.RecordTradeStatusList(tradeRecordPath, myTradeDay.MyTradeDays, TradeDay.MyTradeTicks);
                 return true;
             }
             return false;
         }
         /// <summary>
-        /// 核对交易记录和盘口价格判断能否成交。
+        /// 将每日持仓情况记录进csv本地文件
         /// </summary>
-        /// <returns>返回判断结果</returns>
-        public bool CheckTradeStatusList()
+        /// <param name="today">日期</param>
+        /// <param name="myPortfolio">今日的持仓情况</param>
+       public void RecordPortfolioStatusDaily(int today,portfolioStatus myPortfolio)
+        {
+            List<string[]> printStream = new List<string[]>();
+            List<string> printStream0 = new List<string>();
+            printStream0.Add(today.ToString());
+            printStream0.Add(myPortfolio.portfolioValue.ToString());
+            printStream0.Add(myPortfolio.availableCash.ToString());
+            printStream0.Add(myPortfolio.optionMargin.ToString());
+            printStream0.Add(myPortfolio.optionCost.ToString());
+            printStream0.Add(myPortfolio.optionValue.ToString());
+            printStream0.Add(myPortfolio.optionDelta.ToString());
+            printStream.Add(printStream0.ToArray());
+            CsvUtility.WriteCsv(statusRecordPath, true, printStream);
+        }
+
+    /// <summary>
+    /// 核对交易记录和盘口价格判断能否成交。
+    /// </summary>
+    /// <returns>返回判断结果</returns>
+    public bool CheckTradeStatusList()
         {
             bool isRight = true;
             OptionTradeInformation myOptionTrade=new OptionTradeInformation();
@@ -700,12 +699,12 @@ namespace timeSpread
                     positionInitial.askv = new int[5];
                     positionInitial.bidv = new int[5];
                     int indexOfChange = 0;
-                    while (indexOfChange < myChange.Count)
+                    while (indexOfChange < myChange.Count || indexOfTrade <=endIndex)
                     {
-                        var change = myChange[indexOfChange];
-                        if (change.thisTime <= myHoldList.Value[indexOfTrade].time)
+                       // var change = myChange[indexOfChange];
+                        if (indexOfChange < myChange.Count && myChange[indexOfChange].thisTime <= myHoldList.Value[indexOfTrade].time)
                         {
-                            positionInitial = PositionShot.GetPositionShot(positionInitial, change);
+                            positionInitial = PositionShot.GetPositionShot(positionInitial, myChange[indexOfChange]);
                             indexOfChange += 1;
                         }
                         else
@@ -731,6 +730,7 @@ namespace timeSpread
                                 }
                                 else
                                 {
+                                    isRight = false;
                                     Console.WriteLine("There is wrong in date:{0},code:{1},time{2}!", today, myHoldList.Key, myHoldNow.time);
                                 }
                             }
@@ -754,6 +754,7 @@ namespace timeSpread
                                 }
                                 else
                                 {
+                                    isRight = false;
                                     Console.WriteLine("There is wrong in date:{0},code:{1},time{2}!", today, myHoldList.Key, myHoldNow.time);
                                 }
                             }
@@ -765,14 +766,14 @@ namespace timeSpread
 
                         }
                     }
-
                 }
                 if (position!=0)
                 {
-                    Console.WriteLine("Position:{0} is not balance in option:{1}",position, myHoldList.Key);
+                    isRight = false;
+                    // Console.WriteLine("Position:{0} is not balance in option:{1}",position, myHoldList.Key);
                     //foreach (var item in myHoldList.Value)
                     //{
-                    //    Console.WriteLine("date:{0},time:{1},price:{2},position:{3}",item.date, item.time, item.price, item.position);
+                    //    Console.WriteLine("date:{0},time:{1},price:{2},position:{3}", item.date, item.time, item.price, item.position);
                     //}
                 }
                 totalInterest += Interest;
