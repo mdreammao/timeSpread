@@ -31,6 +31,17 @@
 时间：2016-02-29
 版本：v1.2.1
 #######################################################
+1、修改类Impv以及TradeDays完善功能。
+修改者：毛衡
+时间：2016-03-14
+版本：v1.2.2
+#######################################################
+1、修改数据结构以适应新的数据库格式
+最终版本，后续版本在新的程序中开发。
+修改者：毛衡
+时间：2016-03-17
+版本：v1.2.3
+#######################################################
 **/
 using System;
 using System.Collections.Generic;
@@ -44,7 +55,7 @@ namespace timeSpread
     {
         static void Main(string[] args)
         {
-            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150209, 20151231, 93000000, 150000000);
+            TimeSpreadOne myAnalysis = new TimeSpreadOne(20150701, 20150731, 93000000, 150000000);
             myAnalysis.TimeSpreadAnalysis();
             myAnalysis.RecordTradeStatusList();
             Console.WriteLine(myAnalysis.CheckTradeStatusList());

@@ -44,7 +44,7 @@ namespace timeSpread
                     //创建数据库命令  
                     SqlCommand cmd = conn.CreateCommand();
                     //创建查询语句  
-                    cmd.CommandText = "select * from SH50ETFoption";
+                    cmd.CommandText = "select * from " + Configuration.optionCodeTableName;
                     try
                     {//从数据库中读取数据流存入reader中  
                         SqlDataReader reader = cmd.ExecuteReader();
@@ -52,12 +52,12 @@ namespace timeSpread
                         while (reader.Read())
                         {
                             optionInformation information0 = new optionInformation();
-                            information0.optionCode = (int)(reader.GetDouble(reader.GetOrdinal("contractname")));
-                            information0.optionName = reader.GetString(reader.GetOrdinal("optionname")).Trim();
-                            information0.optionType = reader.GetString(reader.GetOrdinal("optiontype")).Trim();
-                            information0.strike = reader.GetDouble(reader.GetOrdinal("strike"));
-                            information0.startdate = Convert.ToInt32(reader.GetString(reader.GetOrdinal("startdate")).Trim());
-                            information0.enddate = Convert.ToInt32(reader.GetString(reader.GetOrdinal("enddate")).Trim());
+                            information0.optionCode = (reader.GetInt32(reader.GetOrdinal("OptionCode")));
+                            information0.optionName = reader.GetString(reader.GetOrdinal("OptionName")).Trim();
+                            information0.optionType = reader.GetString(reader.GetOrdinal("OptionType")).Trim();
+                            information0.strike = reader.GetDouble(reader.GetOrdinal("Strike"));
+                            information0.startdate = reader.GetInt32(reader.GetOrdinal("StartDate"));
+                            information0.enddate = reader.GetInt32(reader.GetOrdinal("EndDate"));
                             myOptionInformation.Add(information0);
                         }
                     }
@@ -358,14 +358,14 @@ namespace timeSpread
                     SortedDictionary<int, double> myClose = new SortedDictionary<int, double>();
                     try
                     {
-                        cmd.CommandText = "select distinct(nPreSettle),nPreClose,nDate from sh" + Convert.ToString(optionCode) + " order by nDate";
+                        cmd.CommandText = "select distinct(PreSettle),PreClose,Date from sh" + Convert.ToString(optionCode) + " order by Date";
                         SqlDataReader reader = cmd.ExecuteReader();
                         while (reader.Read())
                         {
-                            int today = reader.GetInt32(reader.GetOrdinal("nDate"));
+                            int today = reader.GetInt32(reader.GetOrdinal("Date"));
                             int yesterday    = TradeDay.GetPreviousTradeDay(today);
-                            double myPreSettle = reader.GetDouble(reader.GetOrdinal("nPreSettle"));
-                            double myPreClose = reader.GetDouble(reader.GetOrdinal("nPreClose"));
+                            double myPreSettle = reader.GetDouble(reader.GetOrdinal("PreSettle"));
+                            double myPreClose = reader.GetDouble(reader.GetOrdinal("PreClose"));
                             if (yesterday>0)
                             {
                                 mySettle.Add(yesterday, myPreSettle);

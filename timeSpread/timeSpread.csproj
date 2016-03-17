@@ -66,18 +66,24 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="WAPIWrapperCSharp">
+      <HintPath>.\WAPIWrapperCSharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Configuration.cs" />
     <Compile Include="DataBase.cs" />
     <Compile Include="EtfTradeInformation.cs" />
     <Compile Include="HoldStatus.cs" />
     <Compile Include="Impv.cs" />
     <Compile Include="myStruct.cs" />
     <Compile Include="OptionCodeInformation.cs" />
+    <Compile Include="OptionInformation.cs" />
     <Compile Include="OptionTradeInformation.cs" />
     <Compile Include="PositionShot.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SqlApplication.cs" />
     <Compile Include="Technique.cs" />
     <Compile Include="timeSpreadOne.cs" />
     <Compile Include="TradeDay.cs" />

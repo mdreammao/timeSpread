@@ -14,7 +14,7 @@ namespace timeSpread
         /// <summary>
         /// 记录交易记录的文档地址
         /// </summary>
-        public string tradeRecordPath = "TradeRecords" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".csv";
+        public string tradeRecordPath = "TradeRecords" + DateTime.Now.ToString("yyyyMMddHHmm") + ".csv";
         /// <summary>
         /// 记录每日资金和持仓的文档地址
         /// </summary>
@@ -35,6 +35,8 @@ namespace timeSpread
         /// 回测开始结束日期信息。
         /// </summary>
         private TradeDay myTradeDay;
+
+        private OptionInformation myOptionInfo;
         /// <summary>
         /// 回测的逐笔交易记录
         /// </summary>
@@ -54,6 +56,7 @@ namespace timeSpread
             this.startTime = startTime;
             this.endTime = endTime;
             myTradeDay = new TradeDay(startDate, endDate);
+            myOptionInfo = new OptionInformation(startDate, endDate);
             this.totalCash = cash;
         }
         /// <summary>
@@ -78,10 +81,10 @@ namespace timeSpread
             //利用隐含波动率来估计近月期权合约到期时候50etf的价格，这里使用若干倍的sigma来计算。
             double etfPriceFurtherUp = etfPrice * Math.Exp(2*sigma * Math.Sqrt(duration0 / 252.0));
             double etfPriceFurtherDown= etfPrice * Math.Exp(-2*sigma * Math.Sqrt(duration0 / 252.0));
-            double noChange = Impv.optionPrice(etfPrice, sigmaNew, strike, durationFurther0 - duration0, r, type)- Impv.optionPrice(etfPrice, sigmaNew, strike, 0, r, type);
+            double noChange = Impv.optioLastPrice(etfPrice, sigmaNew, strike, durationFurther0 - duration0, r, type)- Impv.optioLastPrice(etfPrice, sigmaNew, strike, 0, r, type);
             //计算出持有头寸价值的上下限。
-            double up= Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optionPrice(etfPriceFurtherUp, sigmaNew, strike, 0, r, type);
-            double down = Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optionPrice(etfPriceFurtherDown, sigmaNew, strike, 0, r, type);
+            double up= Impv.optioLastPrice(etfPriceFurtherUp, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optioLastPrice(etfPriceFurtherUp, sigmaNew, strike, 0, r, type);
+            double down = Impv.optioLastPrice(etfPriceFurtherDown, sigmaNew, strike, durationFurther0 - duration0, r, type) - Impv.optioLastPrice(etfPriceFurtherDown, sigmaNew, strike, 0, r, type);
             double interestNoChange = noChange - (priceFurther - price);
             double interestUp= up - (priceFurther - price);
             double interestDown=down- (priceFurther - price);
@@ -349,10 +352,10 @@ namespace timeSpread
             Dictionary<int, string> optionType = new Dictionary<int, string>();
             #endregion
             //逐步遍历交易日期，逐日进行回测。
-            for (int dateIndex = 0; dateIndex < myTradeDay.MyTradeDays.Count; dateIndex++)
+            for (int dateIndex = 0; dateIndex < myTradeDay.myTradeDay.Count; dateIndex++)
             {
                 //初始化日内的参数
-                int today = myTradeDay.MyTradeDays[dateIndex];
+                int today = myTradeDay.myTradeDay[dateIndex];
                 fee = 0;
                 myHold = myHoldStatus.GetPositionStatus();
 
@@ -362,7 +365,7 @@ namespace timeSpread
                 Dictionary<int, tradeInformation> optionPositionShot = new Dictionary<int, tradeInformation>();
                 Dictionary<int, List<positionChange>> optionPositionChange = new Dictionary<int, List<positionChange>>();
                 //记录了期权合约遍历的位置，避免先开仓后平仓的情况。
-                Dictionary<int, int> optionIndex = new Dictionary<int, int>();
+                Dictionary<int, int> optioTick = new Dictionary<int, int>();
                 //记录了期权合约距离到期的日期
                 Dictionary<int, int> optionduration = new Dictionary<int, int>();
                 //记录每日参与交易的期权合约代码
@@ -375,7 +378,7 @@ namespace timeSpread
                 EtfTradeInformation myEtfToday = new EtfTradeInformation(today, startTime, endTime);
                 int etfIndex = 0;//记录今日etf价格对应的数组下标，从0开始。
                 double maxEtfPrice = myEtfToday.GetMaxPrice();
-                double minEtfPrice = myEtfToday.GetMinPrice();
+                double minEtfPrice = myEtfToday.GetMiLastPrice();
                 List<int> optionAtTheMoney = OptionCodeInformation.GetOptionCodeInInterval(minEtfPrice, maxEtfPrice, today);
                 List<int> optionCode = new List<int>();
                 List<int> optionCodeFurther = new List<int>();
@@ -413,7 +416,7 @@ namespace timeSpread
                     optionPositionChange.Add(code, myOptionChange.GetPositionChange());
                     tradeInformation positionInitial = new tradeInformation(0,0);
                     optionPositionShot.Add(code, positionInitial);
-                    optionIndex.Add(code, 0);
+                    optioTick.Add(code, 0);
                     optionduration.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
                     if (optionStrike.ContainsKey(code)==false)
                     {
@@ -428,7 +431,7 @@ namespace timeSpread
                     optionPositionChange.Add(code, myOptionChange.GetPositionChange());
                     tradeInformation positionInitial = new tradeInformation(0, 0);
                     optionPositionShot.Add(code, positionInitial);
-                    optionIndex.Add(code, 0);
+                    optioTick.Add(code, 0);
                     optionduration.Add(code, OptionCodeInformation.GetTimeSpan(code, today));
                     if (optionStrike.ContainsKey(code) == false)
                     {
@@ -445,7 +448,7 @@ namespace timeSpread
                 Dictionary<int, int> closeTimeIndex = new Dictionary<int, int>();
                 for (int timeIndex = 1; timeIndex < 28440; timeIndex++)
                 {
-                    int time = TradeDay.MyTradeTicks[timeIndex];
+                    int time = TradeDay.myTradeTicks[timeIndex];
                     //计算实时的标的etf的价格
                     while (etfIndex<= myEtfToday.myTradeInformation.Count - 1 && myEtfToday.myTradeInformation[etfIndex].time<=time)
                     {
@@ -467,12 +470,12 @@ namespace timeSpread
                             continue;
                         }
                         //根据合约代码对应的数组下标以及合约代码对应的盘口快照，生成当前时刻的盘口快照。
-                        int index = optionIndex[code];
-                        int indexFurther = optionIndex[codeFurther];
+                        int index = optioTick[code];
+                        int indexFurther = optioTick[codeFurther];
                         optionPositionShot[code]=GetOpitonShot(ref index, optionPositionShot[code], optionPositionChange[code], time);
                         optionPositionShot[codeFurther] = GetOpitonShot(ref indexFurther, optionPositionShot[codeFurther], optionPositionChange[codeFurther], time);
-                        optionIndex[code] = index;
-                        optionIndex[codeFurther] = indexFurther;
+                        optioTick[code] = index;
+                        optioTick[codeFurther] = indexFurther;
                     }
                     //在每个tick如果有仓位就必须进行平仓的判断。如果满足开仓条件就必须进行开仓。对所有的近月option遍历进行判断。
                     for (int codeListIndex = 0; codeListIndex < optionCode.Count; codeListIndex++)
@@ -619,7 +622,7 @@ namespace timeSpread
             else
             {
                 //将逐笔交易记录存入csv文件
-                myHoldStatus.RecordTradeStatusList(tradeRecordPath, myTradeDay.MyTradeDays, TradeDay.MyTradeTicks);
+                myHoldStatus.RecordTradeStatusList(tradeRecordPath, myTradeDay.myTradeDay, TradeDay.myTradeTicks);
                 return true;
             }
             return false;
@@ -710,7 +713,7 @@ namespace timeSpread
                         else
                         {
                             var myHoldNow = myHoldList.Value[indexOfTrade];
-                            if (myHoldNow.position > 0)  //买入，比较ask1
+                            if (myHoldNow.position > 0)  //买入，比较Ask1
                             {
                                 int indexOfAsk = 5;
                                 for (int i = 0; i < 5; i++)
@@ -734,7 +737,7 @@ namespace timeSpread
                                     Console.WriteLine("There is wrong in date:{0},code:{1},time{2}!", today, myHoldList.Key, myHoldNow.time);
                                 }
                             }
-                            else  //卖出，比较bid1
+                            else  //卖出，比较Bid1
                             {
                                 int indexOfBid = 5;
                                 for (int i = 0; i < 5; i++)

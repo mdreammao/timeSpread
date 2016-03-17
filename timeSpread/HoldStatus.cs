@@ -163,12 +163,12 @@ namespace timeSpread
                             {
                                 first = false;
                                 printStream0.Add(today.ToString());
-                                printStream0.Add(TradeDay.MyTradeTicks[timeIndex].ToString());
+                                printStream0.Add(TradeDay.myTradeTicks[timeIndex].ToString());
                             }
                             printStream0.Add(optionCode.ToString());
                             printStream0.Add(tradeStatusList[dateIndex, timeIndex][optionCode].price.ToString());
                             printStream0.Add(tradeStatusList[dateIndex, timeIndex][optionCode].position.ToString());
-                            //Console.WriteLine("date:{0}, code:{1}, time:{2}, price:{3}, position:{4}", today, optionCode, TradeDay.MyTradeTicks[timeIndex], tradeStatusList[dateIndex, timeIndex][optionCode].price, tradeStatusList[dateIndex, timeIndex][optionCode].position);
+                            //Console.WriteLine("date:{0}, code:{1}, time:{2}, price:{3}, position:{4}", today, optionCode, TradeDay.myTradeTicks[timeIndex], tradeStatusList[dateIndex, timeIndex][optionCode].price, tradeStatusList[dateIndex, timeIndex][optionCode].position);
                         }
                     }
                     if (printStream0.Count>0)
